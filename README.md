@@ -1,5 +1,7 @@
 # Blocky
 
+> **Early Stage** — This project is in active early development. Expect rough edges, missing features, and breaking changes between versions. Contributions and bug reports are welcome.
+
 A futuristic GTK4 app and website blocker for Linux with optional AI-powered adult content detection.
 
 ## Features
