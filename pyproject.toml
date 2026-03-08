@@ -1,0 +1,23 @@
+[project]
+name = "blocky"
+version = "0.1.0"
+description = "Block apps and websites on Linux with a futuristic UI"
+requires-python = ">=3.14"
+dependencies = [
+    "psutil>=6.0.0",
+    "APScheduler>=3.10.4",
+    "SQLAlchemy>=2.0.0",
+]
+
+[project.scripts]
+blocky = "blocky.main:main"
+blocky-cli = "blocky.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
