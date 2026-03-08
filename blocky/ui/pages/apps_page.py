@@ -36,7 +36,7 @@ class AppsPage(Gtk.Box):
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -279,7 +279,7 @@ class AppPickerDialog(Adw.MessageDialog):
         scroll = Gtk.ScrolledWindow()
         scroll.set_min_content_height(200)
         scroll.set_max_content_height(280)
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
         self.app_list = Gtk.ListBox()
         self.app_list.set_selection_mode(Gtk.SelectionMode.SINGLE)

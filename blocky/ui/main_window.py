@@ -27,10 +27,11 @@ class MainWindow(Adw.ApplicationWindow):
         super().__init__(application=app, title="BLOCKY")
         self.app = app
         self.set_default_size(1100, 700)
-        self.set_size_request(800, 500)
+        self.set_size_request(360, 400)
 
         self._build_ui()
         self._setup_status_callback()
+        self._setup_breakpoint()
 
     def _build_ui(self) -> None:
         # Toast overlay wraps everything
@@ -40,16 +41,26 @@ class MainWindow(Adw.ApplicationWindow):
         self.split_view = Adw.OverlaySplitView()
         self.split_view.set_sidebar_width_fraction(0.2)
         self.split_view.set_collapsed(False)
-        self.split_view.set_min_sidebar_width(180)
-        self.split_view.set_max_sidebar_width(240)
+        self.split_view.set_min_sidebar_width(160)
+        self.split_view.set_max_sidebar_width(220)
 
         # Sidebar
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         sidebar_header = Adw.HeaderBar()
         sidebar_header.set_show_end_title_buttons(False)
+        sidebar_header.set_show_start_title_buttons(False)
         title_label = Gtk.Label(label="BLOCKY")
         title_label.add_css_class("title")
         sidebar_header.set_title_widget(title_label)
+
+        # Close button — only shown when sidebar is overlaying content
+        self._close_sidebar_btn = Gtk.Button()
+        self._close_sidebar_btn.set_icon_name("window-close-symbolic")
+        self._close_sidebar_btn.set_tooltip_text("Close sidebar")
+        self._close_sidebar_btn.add_css_class("flat")
+        self._close_sidebar_btn.connect("clicked", lambda _: self.split_view.set_show_sidebar(False))
+        sidebar_header.pack_end(self._close_sidebar_btn)
+
         sidebar_box.append(sidebar_header)
 
         self.nav_list = Gtk.ListBox()
@@ -85,6 +96,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.content_title.add_css_class("title")
         self.content_header.set_title_widget(self.content_title)
 
+        # Sidebar toggle button (shown when sidebar is collapsed / overlaid)
+        self._sidebar_btn = Gtk.Button()
+        self._sidebar_btn.set_icon_name("sidebar-show-symbolic")
+        self._sidebar_btn.set_tooltip_text("Show sidebar")
+        self._sidebar_btn.connect("clicked", self._on_sidebar_toggle)
+        self.content_header.pack_start(self._sidebar_btn)
+
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.stack.set_transition_duration(150)
@@ -101,6 +119,9 @@ class MainWindow(Adw.ApplicationWindow):
         for page_id, page in self.pages.items():
             self.stack.add_named(page, page_id)
 
+        self.stack.set_vexpand(True)
+        self.stack.set_hexpand(True)
+
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content_box.append(self.content_header)
         content_box.append(self.stack)
@@ -116,14 +137,14 @@ class MainWindow(Adw.ApplicationWindow):
         row = Gtk.ListBoxRow()
         row.page_id = page_id
 
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(18)
+        icon.set_pixel_size(16)
         box.append(icon)
 
         lbl = Gtk.Label(label=label, xalign=0)
@@ -144,6 +165,24 @@ class MainWindow(Adw.ApplicationWindow):
         page = self.pages.get(page_id)
         if page and hasattr(page, "refresh"):
             page.refresh()
+
+    def _setup_breakpoint(self) -> None:
+        """Collapse sidebar automatically on narrow windows."""
+        condition = Adw.BreakpointCondition.parse("max-width: 680sp")
+        bp = Adw.Breakpoint(condition=condition)
+        bp.add_setter(self.split_view, "collapsed", True)
+        self.add_breakpoint(bp)
+        # Keep button visibility in sync with collapsed state
+        self.split_view.connect("notify::collapsed", self._on_collapsed_changed)
+        self._on_collapsed_changed(self.split_view, None)
+
+    def _on_collapsed_changed(self, split_view, _param) -> None:
+        collapsed = split_view.get_collapsed()
+        self._sidebar_btn.set_visible(collapsed)
+        self._close_sidebar_btn.set_visible(collapsed)
+
+    def _on_sidebar_toggle(self, _btn) -> None:
+        self.split_view.set_show_sidebar(not self.split_view.get_show_sidebar())
 
     def _setup_status_callback(self) -> None:
         if self.app.block_manager:

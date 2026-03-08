@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS category_blocks (
     smart_detect INTEGER DEFAULT 0,
     enabled_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS llm_domain_cache (
+    domain TEXT PRIMARY KEY,
+    is_adult INTEGER NOT NULL,
+    confidence REAL NOT NULL,
+    provider TEXT NOT NULL,
+    classified_at TEXT NOT NULL
+);
 """
 
 
@@ -281,6 +289,36 @@ class Database:
             ),
         )
         self._conn.commit()
+
+    # --- LLM Domain Cache ---
+
+    def get_llm_cache(self, domain: str) -> Optional[dict]:
+        row = self._conn.execute(
+            "SELECT * FROM llm_domain_cache WHERE domain = ?", (domain,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def set_llm_cache(
+        self, domain: str, is_adult: bool, confidence: float, provider: str
+    ) -> None:
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            """INSERT INTO llm_domain_cache (domain, is_adult, confidence, provider, classified_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(domain) DO UPDATE SET
+                   is_adult=excluded.is_adult,
+                   confidence=excluded.confidence,
+                   provider=excluded.provider,
+                   classified_at=excluded.classified_at""",
+            (domain, int(is_adult), confidence, provider, now),
+        )
+        self._conn.commit()
+
+    def clear_llm_cache(self) -> int:
+        """Delete all cached LLM classifications. Returns number of rows deleted."""
+        cur = self._conn.execute("DELETE FROM llm_domain_cache")
+        self._conn.commit()
+        return cur.rowcount
 
     def close(self) -> None:
         self._conn.close()

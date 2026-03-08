@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Callable, Optional
 
 import psutil
@@ -29,6 +30,7 @@ class BlockManager:
             on_new_pid=self._handle_new_pid,
             on_kill_pid=self._handle_kill_pid,
         )
+        self._llm_scanner = None
 
     def set_status_callback(self, cb: Callable[[], None]) -> None:
         self._on_status_change = cb
@@ -47,12 +49,24 @@ class BlockManager:
         except HelperError as e:
             logger.warning("cgroup_create failed: %s", e)
 
+        # Start the local block page server (port 7878) so blocked HTTP domains
+        # redirect to a friendly "Site Blocked" page instead of a connection error.
+        from blocky.engine import block_page_server
+        block_page_server.start()
+        try:
+            run_helper("iptables_redirect_http")
+        except HelperError as e:
+            logger.warning("iptables_redirect_http failed: %s", e)
+
         self._watcher.start()
         self.reload_all()
         self._restore_categories()
 
     def stop(self) -> None:
         self._watcher.stop()
+        self.disable_llm_detection()
+        from blocky.engine import block_page_server
+        block_page_server.stop()
 
     def reload_all(self) -> None:
         self._watcher.clear_all_rules()
@@ -67,6 +81,10 @@ class BlockManager:
             smart = bool(cat["smart_detect"])
             self._apply_category(cat_id, smart_detect=smart, save=False)
             logger.info("Restored category block: %s (smart=%s)", cat_id, smart)
+
+        # Restore LLM detection if it was enabled
+        if self.db.get_setting("llm_enabled", "0") == "1":
+            self.enable_llm_detection()
 
     # ── Block rule CRUD ──────────────────────────────────────────────────────
 
@@ -323,6 +341,228 @@ class BlockManager:
     def is_smart_detect_active(self, category_id: str) -> bool:
         cat = self.db.get_category(category_id)
         return bool(cat and cat.get("smart_detect"))
+
+    # ── LLM content detection ────────────────────────────────────────────────
+
+    def enable_llm_detection(self) -> None:
+        """Start the LLM background scanner."""
+        if self._llm_scanner and self._llm_scanner.is_alive():
+            logger.debug("LLM scanner already running")
+            return
+
+        provider_name = self.db.get_setting("llm_provider", "anthropic") or "anthropic"
+        api_key = self.db.get_setting("llm_api_key", "") or ""
+        threshold = float(self.db.get_setting("llm_confidence_threshold", "0.85") or "0.85")
+        prescan_limit = int(self.db.get_setting("llm_prescan_limit", "5") or "5")
+
+        if not api_key:
+            logger.warning("LLM detection: no API key configured")
+            return
+
+        from blocky.llm.providers import get_provider
+        from blocky.llm.models import make_agent
+        from blocky.llm.scanner import DomainScanner
+
+        provider = get_provider(provider_name)
+        if not provider:
+            logger.warning("LLM detection: unknown provider %s", provider_name)
+            return
+
+        try:
+            agent = make_agent(provider_name, provider.model_id, api_key, provider.base_url)
+        except Exception as e:
+            logger.error("LLM detection: failed to create agent: %s", e)
+            return
+
+        self._llm_scanner = DomainScanner(
+            db=self.db,
+            agent=agent,
+            provider_name=provider_name,
+            confidence_threshold=threshold,
+            on_adult=self._auto_block_domain,
+            prescan_limit=prescan_limit,
+        )
+        self._llm_scanner.start()
+        logger.info("LLM detection enabled (provider=%s, threshold=%.2f)", provider_name, threshold)
+
+    def disable_llm_detection(self) -> None:
+        """Stop the LLM background scanner."""
+        if self._llm_scanner:
+            self._llm_scanner.stop()
+            self._llm_scanner = None
+            logger.info("LLM detection disabled")
+
+    def is_llm_detection_active(self) -> bool:
+        return self._llm_scanner is not None and self._llm_scanner.is_alive()
+
+    def restart_llm_detection(self) -> None:
+        """Restart the scanner with current DB settings (call after changing provider/key/threshold)."""
+        if self.is_llm_detection_active():
+            self.disable_llm_detection()
+            self.enable_llm_detection()
+
+    def _auto_block_domain(self, domain: str, reason: str, ip: str | None = None) -> None:
+        """Called by scanner when a domain is classified as adult."""
+        from datetime import datetime as _dt
+        from gi.repository import GLib
+
+        # Guard: check not already blocked (scanner may call this twice before DB commits)
+        for rule in self.db.get_all_rules():
+            if rule.domain == domain:
+                return
+
+        # Immediately REJECT the triggering IP (RST existing connection + block new)
+        if ip:
+            try:
+                run_helper("iptables_add_ip", ip=ip, comment=f"blocky-{domain}")
+                logger.info("Dropped live connection to %s (%s)", ip, domain)
+            except HelperError as e:
+                logger.warning("iptables_add_ip failed for %s: %s", ip, e)
+
+            # Force-close the TCP socket so the browser sees an error instantly,
+            # then trigger a browser refresh so it lands on the block page.
+            threading.Thread(
+                target=self._force_browser_refresh,
+                args=(domain, ip),
+                daemon=True,
+            ).start()
+
+
+        rule = BlockRule(
+            name=domain,
+            block_type=BlockType.WEBSITE,
+            domain=domain,
+            block_ip_layer=True,   # also resolve + block any other IPs for this domain
+            status=BlockStatus.ACTIVE,
+            created_at=_dt.now(),
+        )
+        rule_id = self.db.add_rule(rule)
+        rule.id = rule_id
+        self._apply_website(rule)
+        self.db.log_activity(rule_id, domain, f"LLM auto-blocked: {reason}")
+        GLib.idle_add(self._notify)
+
+        # Verify the block is effective by attempting a connection to the IP
+        if ip:
+            import socket as _sock
+            try:
+                _sock.create_connection((ip, 443), timeout=2).close()
+                logger.warning(
+                    "Block verification FAILED for %s (%s) — connection still succeeded",
+                    domain, ip,
+                )
+            except OSError:
+                logger.info(
+                    "Block verification OK for %s (%s) — connection refused/reset as expected",
+                    domain, ip,
+                )
+
+    def _force_browser_refresh(self, domain: str, ip: str) -> None:
+        """
+        After blocking a domain:
+          1. ss --kill  — force-closes the kernel TCP socket (sends RST to
+             both sides so the browser tab shows an error immediately).
+          2. xdotool    — finds browser windows whose title contains the
+             domain name and sends F5, triggering a reload.  On reload the
+             domain resolves to 127.0.0.1 (via /etc/hosts) and our block-page
+             server responds with the "Site Blocked" page.
+        Runs in a daemon thread so it never blocks the main flow.
+        """
+        import shutil
+        import subprocess
+
+        # ── 1. Kill TCP socket immediately ────────────────────────────────────
+        try:
+            run_helper("kill_connections", ip=ip)
+            logger.info("Force-closed TCP connections to %s (%s)", ip, domain)
+        except Exception as e:
+            logger.debug("kill_connections failed for %s: %s", ip, e)
+
+        # ── 2. Trigger browser refresh via xdotool (X11/XWayland) ────────────
+        if not shutil.which("xdotool"):
+            return
+        try:
+            # Search windows whose title contains the apex domain
+            result = subprocess.run(
+                ["xdotool", "search", "--name", domain],
+                capture_output=True, text=True, timeout=3,
+            )
+            wids = result.stdout.strip().split()
+            for wid in wids[:10]:
+                # Send F5 to refresh — browser will reload and hit our block page
+                subprocess.run(
+                    ["xdotool", "key", "--window", wid, "F5"],
+                    capture_output=True, timeout=2,
+                )
+                logger.info("Sent F5 to browser window %s (blocked domain: %s)", wid, domain)
+        except Exception as e:
+            logger.debug("xdotool refresh failed for %s: %s", domain, e)
+
+    def _kill_browser_tabs_for_ip(self, ip: str) -> None:
+        """
+        Find processes with an open TCP socket to *ip* and SIGTERM them.
+
+        For Chromium/Brave/Vivaldi each tab runs as a separate renderer
+        subprocess — terminating it closes only that tab (shows 'Aw, Snap!').
+        For Firefox the web-content process for that tab is terminated.
+        Other tabs and the browser chrome remain untouched.
+        """
+        import glob
+        import os
+        import socket as _sock
+
+        # Convert dotted-decimal IPv4 → 8-char little-endian hex (for /proc/net/tcp)
+        try:
+            packed = _sock.inet_aton(ip)
+            hex_ip = packed[::-1].hex().upper()
+        except OSError:
+            return  # IPv6 or invalid — skip for now
+
+        # ── 1. Find socket inodes for ESTABLISHED connections to this IP ──────
+        inodes: set[str] = set()
+        for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+            try:
+                with open(path) as fh:
+                    next(fh)  # skip header
+                    for line in fh:
+                        cols = line.split()
+                        if len(cols) < 10:
+                            continue
+                        if cols[3] != "01":  # 01 = ESTABLISHED
+                            continue
+                        remote_hex = cols[2].split(":")[0].upper()
+                        if hex_ip in remote_hex:
+                            inodes.add(cols[9])
+            except OSError:
+                pass
+
+        if not inodes:
+            return
+
+        # ── 2. Walk /proc/PID/fd to find which PIDs own those inodes ─────────
+        pids: set[int] = set()
+        for fd_path in glob.iglob("/proc/*/fd/*"):
+            try:
+                target = os.readlink(fd_path)
+                if target.startswith("socket:["):
+                    inode = target[8:-1]
+                    if inode in inodes:
+                        pids.add(int(fd_path.split("/")[2]))
+            except (OSError, ValueError):
+                pass
+
+        # ── 3. SIGTERM each matching process ──────────────────────────────────
+        for pid in pids:
+            try:
+                proc = psutil.Process(pid)
+                name = proc.name()
+                proc.terminate()
+                logger.info(
+                    "Closed browser tab: terminated process %d (%s) connected to %s",
+                    pid, name, ip,
+                )
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
 
     # ── Process event handlers ───────────────────────────────────────────────
 

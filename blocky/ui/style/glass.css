@@ -1,0 +1,543 @@
+/*
+ * Blocky — Liquid Glass Theme
+ *
+ * Design principles:
+ *   • Window: vivid wallpaper-style gradient (the "world behind the glass")
+ *   • Surfaces: very low-opacity white — you see the gradient through them
+ *   • 3-D depth: three stacked box-shadows per surface:
+ *       1. inset top bright rim   → specular highlight (light hits top edge)
+ *       2. inset bottom dark rim  → ground shadow (thickness illusion)
+ *       3. outer coloured glow    → element floats above background
+ *   • Buttons: prismatic gradient (white→tint→colour) + same 3-D treatment
+ *   • Typography: dark on glass (readable through translucency)
+ */
+
+/* ── 1. LIBADWAITA NAMED-COLOR OVERRIDES ─────────────────────────────────
+   These tokens are consumed by all Adw.* widgets at FORCE_LIGHT.
+   Keep them translucent/near-white so Adw rows don't hide the window bg.
+   ──────────────────────────────────────────────────────────────────────── */
+
+@define-color window_bg_color          rgba(210, 230, 255, 0.0);
+@define-color window_fg_color          #1a2540;
+
+@define-color card_bg_color            rgba(255, 255, 255, 0.28);
+@define-color card_fg_color            #1a2540;
+
+@define-color headerbar_bg_color       rgba(255, 255, 255, 0.30);
+@define-color headerbar_fg_color       #1a2540;
+@define-color headerbar_border_color   rgba(255, 255, 255, 0.55);
+@define-color headerbar_backdrop_color rgba(255, 255, 255, 0.20);
+@define-color headerbar_shade_color    rgba(0,   0,   0,   0.04);
+
+@define-color sidebar_bg_color         rgba(255, 255, 255, 0.22);
+@define-color sidebar_fg_color         #1a2540;
+@define-color sidebar_backdrop_color   rgba(255, 255, 255, 0.15);
+@define-color sidebar_border_color     rgba(255, 255, 255, 0.45);
+@define-color sidebar_shade_color      rgba(0,   0,   0,   0.04);
+
+@define-color view_bg_color            rgba(255, 255, 255, 0.15);
+@define-color view_fg_color            #1a2540;
+
+@define-color popover_bg_color         rgba(240, 248, 255, 0.92);
+@define-color popover_fg_color         #1a2540;
+
+@define-color dialog_bg_color          rgba(235, 245, 255, 0.94);
+@define-color dialog_fg_color          #1a2540;
+
+@define-color accent_color             #1565c0;
+@define-color accent_bg_color          #1e88e5;
+@define-color accent_fg_color          #ffffff;
+
+@define-color destructive_color        #c62828;
+@define-color destructive_bg_color     #ef5350;
+@define-color destructive_fg_color     #ffffff;
+
+@define-color success_color            #00897b;
+@define-color success_bg_color         #26a69a;
+@define-color success_fg_color         #ffffff;
+
+@define-color warning_color            #e65100;
+@define-color warning_bg_color         #ff7043;
+@define-color warning_fg_color         #ffffff;
+
+/* ── 2. LOCAL PALETTE ────────────────────────────────────────────────────
+   Internal convenience colours — not Adwaita tokens.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Specular rim colours */
+@define-color _rim_top    rgba(255, 255, 255, 0.88);
+@define-color _rim_bottom rgba(180, 200, 240, 0.25);
+
+/* Surface fill */
+@define-color _surf_fill  rgba(255, 255, 255, 0.22);
+@define-color _surf_hover rgba(255, 255, 255, 0.36);
+
+/* Outer glow / shadow */
+@define-color _glow_blue  rgba(30, 100, 220, 0.22);
+@define-color _glow_red   rgba(220, 50,  80, 0.18);
+@define-color _glow_green rgba(20, 160, 140, 0.18);
+
+/* Accent tints for prismatic buttons */
+@define-color _teal       #00bcd4;
+@define-color _purple     #7e57c2;
+@define-color _orange     #ff7043;
+@define-color _text_dim   #3d5470;
+@define-color _text_muted #6b84a8;
+
+/* ── 3. WINDOW — THE "WORLD BEHIND THE GLASS" ────────────────────────────
+   Rich, saturated wallpaper. Everything rendered on top is glass.
+   ──────────────────────────────────────────────────────────────────────── */
+
+window {
+    background:
+        linear-gradient(135deg,
+            #a8c8f8  0%,
+            #c5b5f5 28%,
+            #9dd8f0 52%,
+            #b8f0e0 74%,
+            #fce4b0 100%
+        );
+    color: @window_fg_color;
+}
+
+/* Make all libadwaita internal containers transparent so the window gradient shows through */
+.background,
+toolbarview,
+toolbarview > .top-bar,
+toolbarview > .bottom-bar,
+overlay-split-view,
+overlay-split-view > .content,
+stack,
+box,
+.view,
+scrolledwindow > viewport {
+    background-color: transparent;
+}
+
+/* ── 4. GLASS SURFACE MACRO ──────────────────────────────────────────────
+   Reused across header, sidebar, cards, dialogs, rows.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Applied directly wherever needed via compound selectors below. */
+
+/* ── 5. HEADER BAR ───────────────────────────────────────────────────────  */
+
+headerbar {
+    background: rgba(255, 255, 255, 0.28);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+        /* specular top rim */
+        inset  0  1px  0 rgba(255, 255, 255, 0.90),
+        /* bottom rim — thickness */
+        inset  0 -1px  0 rgba(180, 200, 240, 0.30),
+        /* outer drop shadow */
+        0 4px 24px rgba(30, 80, 180, 0.18);
+}
+
+headerbar .title {
+    color: @accent_bg_color;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-shadow: 0 1px 6px rgba(255,255,255,0.70);
+}
+
+/* ── 6. SIDEBAR ──────────────────────────────────────────────────────────  */
+
+.nav-sidebar {
+    background: rgba(255, 255, 255, 0.20);
+    border-right: 1px solid rgba(255, 255, 255, 0.48);
+    min-width: 160px;
+    box-shadow:
+        inset -1px 0 0 rgba(255, 255, 255, 0.50),
+        1px 0 16px rgba(30, 80, 180, 0.10);
+}
+
+.nav-sidebar row {
+    padding: 4px 8px;
+    border-radius: 14px;
+    margin: 2px 8px;
+    transition: background-color 150ms ease;
+}
+
+.nav-sidebar row:hover {
+    background: rgba(255, 255, 255, 0.38);
+}
+
+.nav-sidebar row:selected {
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow:
+        inset 0  1px 0 rgba(255, 255, 255, 0.90),
+        inset 0 -1px 0 rgba(30, 80, 200, 0.12),
+        0 4px 12px rgba(30, 100, 220, 0.18);
+}
+
+.nav-sidebar row:selected label {
+    color: @accent_bg_color;
+    font-weight: 600;
+}
+
+/* ── 7. BLOCKY CARDS ─────────────────────────────────────────────────────  */
+
+.blocky-card {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 22px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.88),  /* top specular rim */
+        inset  0 -1px  0 rgba(160, 190, 240, 0.28),  /* bottom thickness */
+        0 8px 32px rgba(30, 80, 180, 0.18),           /* outer glow */
+        0 2px  8px rgba(0,   0,   0,  0.08);
+    transition: box-shadow 200ms ease, background 200ms ease;
+}
+
+.blocky-card:hover {
+    background: rgba(255, 255, 255, 0.36);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.95),
+        inset  0 -1px  0 rgba(160, 190, 240, 0.35),
+        0 14px 42px rgba(30, 80, 200, 0.26),
+        0  3px 12px rgba(0,   0,   0,  0.10);
+}
+
+.blocky-card.active {
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.90),
+        inset  0 -1px  0 rgba(220, 80, 100, 0.22),
+        0 8px 32px @_glow_red,
+        0 2px  8px rgba(0, 0, 0, 0.08);
+}
+
+.blocky-card.paused { opacity: 0.72; }
+
+/* ── 8. ADW PREFERENCE ROWS — GLASS SURFACE OVERRIDE ────────────────────  */
+
+/* Adw.PreferencesGroup list box gets the glass surface treatment */
+.preferences-group > box > list,
+.preferences-group > list {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.85),
+        inset  0 -1px  0 rgba(160, 190, 240, 0.22),
+        0 6px 24px rgba(30, 80, 180, 0.14);
+}
+
+row.activatable:hover {
+    background: rgba(255, 255, 255, 0.30);
+}
+
+/* ── 9. STATUS DOTS ──────────────────────────────────────────────────────  */
+
+@keyframes pulse-green {
+    0%   { box-shadow: 0 0 0 0   rgba(20, 160, 140, 0.80); }
+    70%  { box-shadow: 0 0 0 8px rgba(20, 160, 140, 0);    }
+    100% { box-shadow: 0 0 0 0   rgba(20, 160, 140, 0);    }
+}
+@keyframes pulse-red {
+    0%   { box-shadow: 0 0 0 0   rgba(220, 50, 80, 0.80); }
+    70%  { box-shadow: 0 0 0 8px rgba(220, 50, 80, 0);    }
+    100% { box-shadow: 0 0 0 0   rgba(220, 50, 80, 0);    }
+}
+
+.status-dot {
+    min-width: 10px; min-height: 10px;
+    border-radius: 50%;
+    background: @_text_muted;
+}
+.status-dot.active  { background: @success_bg_color;     animation: pulse-green 2s infinite; }
+.status-dot.blocked { background: @destructive_bg_color; animation: pulse-red   2s infinite; }
+.status-dot.paused  { background: @_orange; }
+
+/* ── 10. BUTTONS — PRISMATIC GLASS ───────────────────────────────────────  */
+
+button { border-radius: 14px; transition: all 150ms ease; }
+
+button.suggested-action {
+    /* White leading edge → tinted middle → saturated accent */
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.55)  0%,
+            rgba(30,  136, 229, 0.72) 45%,
+            rgba(0,   188, 212, 0.85) 100%
+        );
+    color: #fff;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    text-shadow: 0 1px 4px rgba(0, 60, 130, 0.35);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.72),   /* top specular */
+        inset  0 -1px  0 rgba(0, 100, 180, 0.25),     /* bottom depth */
+        0 6px 20px rgba(30, 136, 229, 0.38),
+        0 2px  6px rgba(0, 0, 0, 0.12);
+}
+button.suggested-action:hover {
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.68)  0%,
+            rgba(30,  136, 229, 0.88) 45%,
+            rgba(0,   188, 212, 0.96) 100%
+        );
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.82),
+        inset  0 -1px  0 rgba(0,  100, 180, 0.30),
+        0 10px 28px rgba(30, 136, 229, 0.50),
+        0  3px  8px rgba(0, 0, 0, 0.14);
+}
+
+button.destructive-action {
+    background: rgba(255, 255, 255, 0.32);
+    color: @destructive_color;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.75),
+        inset  0 -1px 0 rgba(220, 50, 80, 0.18);
+}
+button.destructive-action:hover {
+    background: rgba(255, 255, 255, 0.42);
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.85),
+        inset  0 -1px 0 rgba(220, 50, 80, 0.25),
+        0 6px 18px @_glow_red;
+}
+
+/* FAB */
+.fab {
+    background:
+        linear-gradient(145deg,
+            rgba(255, 255, 255, 0.55) 0%,
+            rgba(30,  136, 229, 0.80) 50%,
+            rgba(0,   188, 212, 0.92) 100%
+        );
+    color: #fff;
+    border-radius: 50%;
+    min-width: 56px; min-height: 56px;
+    font-size: 24px; font-weight: 900;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.75),
+        inset  0 -1px  0 rgba(0,  100, 180, 0.28),
+        0 10px 30px rgba(30, 136, 229, 0.42),
+        0  3px  8px rgba(0, 0, 0, 0.14);
+}
+.fab:hover {
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.85),
+        inset  0 -1px  0 rgba(0,  100, 180, 0.35),
+        0 14px 38px rgba(30, 136, 229, 0.55);
+}
+
+/* ── 11. SWITCHES ────────────────────────────────────────────────────────  */
+
+switch {
+    background: rgba(255, 255, 255, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    border-radius: 16px;
+    box-shadow:
+        inset 0  1px 0 rgba(255, 255, 255, 0.70),
+        inset 0 -1px 0 rgba(160, 190, 240, 0.22);
+}
+switch:checked {
+    background:
+        linear-gradient(135deg,
+            rgba(0,  188, 212, 0.82),
+            rgba(0,  168, 140, 0.88)
+        );
+    border-color: rgba(255, 255, 255, 0.60);
+    box-shadow:
+        inset 0  1px 0 rgba(255, 255, 255, 0.62),
+        0 4px 12px @_glow_green;
+}
+switch slider {
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22),
+                0 1px  3px rgba(0, 0, 0, 0.12);
+}
+
+/* ── 12. ENTRIES ─────────────────────────────────────────────────────────  */
+
+entry {
+    background: rgba(255, 255, 255, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: 14px;
+    color: @window_fg_color;
+    caret-color: @accent_bg_color;
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.80),
+        inset  0 -1px 0 rgba(160, 190, 240, 0.20),
+        0 4px 14px rgba(30, 80, 180, 0.10);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+entry:focus {
+    border-color: rgba(255, 255, 255, 0.80);
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.90),
+        inset  0 -1px 0 rgba(30, 136, 229, 0.22),
+        0 0 0 3px rgba(30, 136, 229, 0.20),
+        0 4px 14px rgba(30, 80, 180, 0.14);
+}
+
+/* ── 13. LIST BOXES ──────────────────────────────────────────────────────  */
+
+listbox { background: transparent; }
+listbox row {
+    background: transparent;
+    border-radius: 12px;
+    transition: background 100ms ease;
+}
+listbox row:hover    { background: rgba(255, 255, 255, 0.32); }
+listbox row:selected { background: rgba(30, 136, 229, 0.14); }
+
+/* ── 14. STAT CARDS ──────────────────────────────────────────────────────  */
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.88),
+        inset  0 -1px  0 rgba(160, 190, 240, 0.25),
+        0 10px 36px rgba(30, 80, 180, 0.20),
+        0  2px  8px rgba(0,  0,  0,  0.08);
+}
+.stat-number       { color: @accent_bg_color; font-size: 48px; font-weight: 900; letter-spacing: -2px; text-shadow: 0 2px 12px rgba(30,136,229,0.35); }
+.stat-number.danger{ color: @destructive_bg_color; text-shadow: 0 2px 12px rgba(220,50,80,0.35); }
+.stat-label        { color: @_text_dim; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+
+/* ── 15. LABELS ──────────────────────────────────────────────────────────  */
+
+.heading        { color: @window_fg_color; font-weight: 700; font-size: 18px; }
+.subheading     { color: @_text_dim; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.domain-label   { color: @accent_bg_color; font-family: monospace; font-size: 13px; }
+.app-name-label { color: @window_fg_color; font-weight: 600; }
+.muted          { color: @_text_muted; font-size: 12px; }
+
+/* ── 16. BADGES ──────────────────────────────────────────────────────────  */
+
+.badge {
+    border-radius: 20px; padding: 2px 10px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    background: rgba(255, 255, 255, 0.38);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70);
+}
+.badge.website  { color: @accent_bg_color; }
+.badge.app      { color: @_purple; }
+.badge.scheduled{ color: @_orange; }
+
+/* ── 17. PERMISSION BANNER ───────────────────────────────────────────────  */
+
+.permission-banner {
+    background: rgba(255, 200, 150, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    border-radius: 16px; padding: 12px 16px;
+    color: @warning_color;
+    box-shadow:
+        inset 0  1px 0 rgba(255, 255, 255, 0.70),
+        0 4px 14px rgba(200, 80, 20, 0.14);
+}
+
+/* ── 18. SCROLLBARS ──────────────────────────────────────────────────────  */
+
+scrollbar { background: transparent; }
+/* Scope to scrollbar > trough > slider to avoid hitting GtkScale sliders */
+scrollbar > trough > slider {
+    background: rgba(255, 255, 255, 0.42);
+    border-radius: 4px;
+    min-width: 6px;
+    min-height: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.60);
+}
+scrollbar > trough > slider:hover { background: rgba(255, 255, 255, 0.62); }
+
+/* ── 19. DIALOGS ─────────────────────────────────────────────────────────  */
+
+dialog {
+    background: rgba(235, 245, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 26px;
+    box-shadow:
+        inset  0  1px  0 rgba(255, 255, 255, 0.92),
+        inset  0 -1px  0 rgba(160, 190, 240, 0.30),
+        0 28px 70px rgba(30,  80, 200, 0.28),
+        0  6px 20px rgba(0,   0,   0,  0.10);
+}
+
+/* ── 20. APP PICKER ──────────────────────────────────────────────────────  */
+
+.app-picker-item {
+    border-radius: 18px; padding: 12px;
+    border: 1px solid transparent;
+    transition: all 150ms ease;
+}
+.app-picker-item:hover {
+    background: rgba(255, 255, 255, 0.38);
+    border-color: rgba(255, 255, 255, 0.65);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.80), 0 4px 14px rgba(30,80,180,0.14);
+}
+.app-picker-item:selected {
+    background: rgba(30, 136, 229, 0.14);
+    border-color: rgba(30, 136, 229, 0.35);
+}
+
+/* ── 21. DAY TOGGLES ─────────────────────────────────────────────────────  */
+
+.day-toggle {
+    border-radius: 12px; min-width: 36px; min-height: 36px;
+    font-weight: 700; font-size: 11px; padding: 0;
+    background: rgba(255, 255, 255, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.60);
+    color: @_text_dim;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+}
+.day-toggle:checked {
+    background: rgba(30, 136, 229, 0.20);
+    border-color: rgba(30, 136, 229, 0.42);
+    color: @accent_bg_color;
+    box-shadow:
+        inset 0  1px 0 rgba(255,255,255,0.72),
+        0 4px 10px rgba(30,136,229,0.22);
+}
+
+/* ── 22. SEPARATOR ───────────────────────────────────────────────────────  */
+
+separator { background: rgba(255, 255, 255, 0.30); }
+
+/* ── 23. SPINBUTTON / COMBOBOX / DROPDOWN ────────────────────────────────  */
+
+spinbutton, combobox, dropdownbutton {
+    background: rgba(255, 255, 255, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    border-radius: 12px; color: @window_fg_color;
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.80),
+        inset  0 -1px 0 rgba(160, 190, 240, 0.20);
+}
+spinbutton:focus, combobox:focus, dropdownbutton:focus {
+    border-color: rgba(30, 136, 229, 0.50);
+}
+
+/* ── 24. TOAST ───────────────────────────────────────────────────────────  */
+
+.toast {
+    background: rgba(230, 244, 255, 0.90);
+    border: 1px solid rgba(255, 255, 255, 0.70);
+    border-radius: 16px; color: @window_fg_color;
+    box-shadow:
+        inset  0  1px 0 rgba(255, 255, 255, 0.88),
+        0 10px 30px rgba(30, 80, 200, 0.22);
+}
+
+/* ── 25. ACTIVITY LOG ────────────────────────────────────────────────────  */
+
+.activity-row { border-bottom: 1px solid rgba(255,255,255,0.28); padding: 8px 0; }
+.activity-action { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
+.activity-action.activated { color: @success_color; }
+.activity-action.paused    { color: @warning_color; }
+.activity-action.deleted   { color: @destructive_color; }

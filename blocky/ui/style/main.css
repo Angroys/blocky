@@ -48,7 +48,7 @@ headerbar .title {
 .nav-sidebar {
     background-color: @bg_secondary;
     border-right: 1px solid @border_subtle;
-    min-width: 200px;
+    min-width: 160px;
 }
 
 .nav-sidebar row {
@@ -328,14 +328,14 @@ scrollbar {
     background-color: transparent;
 }
 
-scrollbar slider {
+scrollbar > trough > slider {
     background-color: @border_subtle;
     border-radius: 4px;
-    min-width: 4px;
-    min-height: 4px;
+    min-width: 6px;
+    min-height: 6px;
 }
 
-scrollbar slider:hover {
+scrollbar > trough > slider:hover {
     background-color: @text_muted;
 }
 

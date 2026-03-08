@@ -29,6 +29,10 @@ ALLOWED_ACTIONS = {
     "iptables_add_website",
     "iptables_remove_website",
     "iptables_add_ip",
+    "iptables_temp_block",
+    "iptables_temp_unblock",
+    "iptables_redirect_http",
+    "kill_connections",
     "dns_redirect_enable",
     "dns_redirect_disable",
     "iptables_add_app_cgroup",
@@ -37,6 +41,9 @@ ALLOWED_ACTIONS = {
     "cgroup_add_pid",
     "cgroup_remove_pid",
 }
+
+TEMP_CHAIN = "BLOCKY_TEMP"
+REDIRECT_PORT = 7878
 
 _DOMAIN_RE = re.compile(
     r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+"
@@ -245,11 +252,15 @@ def _resolve_ips(domain: str) -> list[str]:
 
 
 def iptables_add_ip(data: dict) -> None:
-    """Block a specific IP address directly (bypasses /etc/hosts resolution)."""
+    """
+    Immediately block a specific IP address.
+    Uses REJECT --reject-with tcp-reset (not DROP) so the existing TCP connection
+    receives a RST and dies immediately rather than timing out.
+    Also flushes conntrack state for the IP so the kernel discards in-flight flows.
+    """
     ip = data.get("ip", "").strip()
     if not ip:
         die("ip is required")
-    # Basic IP validation
     try:
         if ":" in ip:
             socket.inet_pton(socket.AF_INET6, ip)
@@ -259,9 +270,31 @@ def iptables_add_ip(data: dict) -> None:
             v6 = False
     except Exception:
         die(f"Invalid IP address: {ip!r}")
+
     comment = data.get("comment", "blocky-ip")
-    _iptables(["-A", CHAIN_NAME, "-d", ip, "-j", "DROP",
-               "-m", "comment", "--comment", comment], v6=v6, check=False)
+
+    # Ensure the chain + OUTPUT jump exist (idempotent)
+    _iptables(["-N", CHAIN_NAME], v6=v6, check=False)
+    chain_exists = _iptables(["-C", "OUTPUT", "-j", CHAIN_NAME], v6=v6, check=False)
+    if not chain_exists:
+        _iptables(["-I", "OUTPUT", "-j", CHAIN_NAME], v6=v6)
+
+    reject_args = ["--reject-with", "tcp-reset"] if not v6 else ["--reject-with", "icmp6-port-unreachable"]
+
+    # Block outbound packets to the IP (prevents new requests + RSTs existing conn)
+    _iptables(["-I", CHAIN_NAME, "-d", ip, "-p", "tcp", "-j", "REJECT"] + reject_args +
+              ["-m", "comment", "--comment", comment], v6=v6, check=False)
+    # Block inbound packets from the IP (kills server keep-alives / in-flight data)
+    _iptables(["-I", CHAIN_NAME, "-s", ip, "-p", "tcp", "-j", "REJECT"] + reject_args +
+              ["-m", "comment", "--comment", comment], v6=v6, check=False)
+
+    # Flush conntrack entries so kernel doesn't keep routing established-state packets
+    # (conntrack may not be installed — ignore if missing)
+    import shutil
+    if shutil.which("conntrack"):
+        _run(["conntrack", "-D", "-d", ip], check=False)
+        _run(["conntrack", "-D", "-s", ip], check=False)
+
     ok()
 
 
@@ -378,6 +411,99 @@ def cgroup_remove_pid(data: dict) -> None:
         die(f"Failed to remove PID {pid} from cgroup: {e}")
 
 
+def _validate_ip(ip: str) -> tuple[str, bool]:
+    """Return (ip, is_v6) or die on invalid input."""
+    ip = ip.strip()
+    try:
+        if ":" in ip:
+            socket.inet_pton(socket.AF_INET6, ip)
+            return ip, True
+        else:
+            socket.inet_pton(socket.AF_INET, ip)
+            return ip, False
+    except Exception:
+        die(f"Invalid IP address: {ip!r}")
+
+
+def iptables_temp_block(data: dict) -> None:
+    """
+    Temporarily DROP packets to/from an IP while the LLM classifies it.
+    Uses a separate BLOCKY_TEMP chain tagged with comment 'blocky-temp-<ip>'
+    so temp rules can be cleanly removed without touching permanent blocks.
+    """
+    ip, v6 = _validate_ip(data.get("ip", ""))
+    comment = f"blocky-temp-{ip}"
+
+    # Ensure temp chain exists
+    _iptables(["-N", TEMP_CHAIN], v6=v6, check=False)
+    _iptables(["-C", "OUTPUT", "-j", TEMP_CHAIN], v6=v6, check=False) or \
+        _iptables(["-I", "OUTPUT", "-j", TEMP_CHAIN], v6=v6)
+
+    # Drop outbound only (enough to pause the page load)
+    _iptables(["-I", TEMP_CHAIN, "-d", ip, "-p", "tcp",
+               "-m", "comment", "--comment", comment, "-j", "DROP"],
+              v6=v6, check=False)
+    ok()
+
+
+def iptables_temp_unblock(data: dict) -> None:
+    """Remove the temporary DROP rule added by iptables_temp_block."""
+    ip, v6 = _validate_ip(data.get("ip", ""))
+    comment = f"blocky-temp-{ip}"
+    # Delete all rules in TEMP_CHAIN with this comment
+    while True:
+        result = _run(
+            ["ip6tables" if v6 else "iptables",
+             "-D", TEMP_CHAIN, "-d", ip, "-p", "tcp",
+             "-m", "comment", "--comment", comment, "-j", "DROP"],
+            check=False,
+        )
+        if result.returncode != 0:
+            break
+    ok()
+
+
+def iptables_redirect_http(_: dict) -> None:
+    """
+    Add an iptables NAT OUTPUT rule that redirects port-80 connections to
+    127.0.0.1 → localhost:REDIRECT_PORT (our block page server).
+    Called once at startup; idempotent.
+    """
+    check = _iptables(
+        ["-t", "nat", "-C", "OUTPUT",
+         "-p", "tcp", "-d", "127.0.0.1", "--dport", "80",
+         "-j", "REDIRECT", "--to-port", str(REDIRECT_PORT)],
+        check=False,
+    )
+    if not check:
+        _iptables(
+            ["-t", "nat", "-I", "OUTPUT",
+             "-p", "tcp", "-d", "127.0.0.1", "--dport", "80",
+             "-j", "REDIRECT", "--to-port", str(REDIRECT_PORT)],
+        )
+    ok()
+
+
+def kill_connections(data: dict) -> None:
+    """
+    Force-close all ESTABLISHED TCP connections to a given IP using `ss --kill`.
+    This sends RST to both sides, making the browser's current tab fail immediately
+    so it can be redirected to the block page on its next request.
+    Also works for IPv4 and IPv6.
+    """
+    ip, v6 = _validate_ip(data.get("ip", ""))
+    if not shutil.which("ss"):
+        ok()
+        return
+
+    # ss filter syntax: 'dst <ip>' matches connections destined to ip
+    dst_filter = f"dst [{ip}]" if v6 else f"dst {ip}"
+    src_filter = f"src [{ip}]" if v6 else f"src {ip}"
+    for filt in (dst_filter, src_filter):
+        _run(["ss", "--kill", "state", "established", filt], check=False)
+    ok()
+
+
 # ----- Dispatch -----
 
 ACTION_MAP = {
@@ -388,6 +514,10 @@ ACTION_MAP = {
     "dns_redirect_disable": dns_redirect_disable,
     "iptables_teardown": iptables_teardown,
     "iptables_add_ip": iptables_add_ip,
+    "iptables_temp_block": iptables_temp_block,
+    "iptables_temp_unblock": iptables_temp_unblock,
+    "iptables_redirect_http": iptables_redirect_http,
+    "kill_connections": kill_connections,
     "iptables_add_website": iptables_add_website,
     "iptables_remove_website": iptables_remove_website,
     "iptables_add_app_cgroup": iptables_add_app_cgroup,
