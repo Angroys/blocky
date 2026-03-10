@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 _STYLE_DIR = Path(__file__).parent / "style"
 CSS_PATH = _STYLE_DIR / "main.css"
-CSS_GLASS_PATH = _STYLE_DIR / "glass.css"
+CSS_LIGHT_PATH = _STYLE_DIR / "glass.css"
 
 
 class BlockyApplication(Adw.Application):
@@ -44,11 +44,11 @@ class BlockyApplication(Adw.Application):
 
     def _load_css(self) -> None:
         theme = (self.db.get_setting("ui_theme", "dark") or "dark") if self.db else "dark"
-        css_path = CSS_GLASS_PATH if theme == "glass" else CSS_PATH
+        css_path = CSS_LIGHT_PATH if theme == "light" else CSS_PATH
 
-        # Tell libadwaita to use light mode for glass, dark for neon
+        # Tell libadwaita to use light mode for neumorphic, dark for neo-tactile
         style_mgr = Adw.StyleManager.get_default()
-        if theme == "glass":
+        if theme == "light":
             style_mgr.set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
         else:
             style_mgr.set_color_scheme(Adw.ColorScheme.FORCE_DARK)

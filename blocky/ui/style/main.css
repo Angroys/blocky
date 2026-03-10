@@ -1,24 +1,22 @@
-/* Blocky - Futuristic Dark Theme */
+/* Blocky — Dark Theme */
 
-/* ── Color definitions ──────────────────────────────── */
-@define-color bg_primary         #0a0a0f;
-@define-color bg_secondary       #12121a;
-@define-color bg_tertiary        #1a1a26;
-@define-color bg_card            #0f0f1a;
-@define-color accent_cyan        #00d4ff;
-@define-color accent_purple      #9d4edd;
-@define-color accent_green       #39ff14;
-@define-color accent_red         #ff3366;
-@define-color accent_orange      #ff6b35;
-@define-color text_primary       #e2e2f0;
-@define-color text_muted         #6b6b8a;
-@define-color border_subtle      rgba(255, 255, 255, 0.06);
-@define-color border_cyan        rgba(0, 212, 255, 0.25);
-@define-color border_red         rgba(255, 51, 102, 0.35);
-@define-color border_green       rgba(57, 255, 20, 0.3);
-@define-color glow_cyan          rgba(0, 212, 255, 0.08);
-@define-color glow_red           rgba(255, 51, 102, 0.08);
-@define-color glow_green         rgba(57, 255, 20, 0.08);
+/* ── Color palette ──────────────────────────────────── */
+@define-color bg_primary         #0F1721;
+@define-color bg_secondary       #1A2332;
+@define-color bg_tertiary        #2C343E;
+@define-color accent_blue        #4D89FF;
+@define-color accent_cyan        #00F2FF;
+@define-color accent_lavender    #C5C5FF;
+@define-color accent_red         #FF4757;
+@define-color accent_orange      #FF7043;
+@define-color text_primary       #FFFFFF;
+@define-color text_muted         #A0AEC0;
+@define-color text_dim           #64748B;
+@define-color border_subtle      rgba(255, 255, 255, 0.10);
+@define-color border_glass       rgba(255, 255, 255, 0.18);
+@define-color glow_cyan          rgba(0, 242, 255, 0.12);
+@define-color glow_blue          rgba(77, 137, 255, 0.15);
+@define-color glow_red           rgba(255, 71, 87, 0.10);
 
 /* ── Window & global ────────────────────────────────── */
 window {
@@ -32,39 +30,39 @@ window {
 
 /* ── Header bar ─────────────────────────────────────── */
 headerbar {
-    background-color: @bg_secondary;
-    border-bottom: 1px solid @border_subtle;
-    box-shadow: none;
+    background-color: rgba(26, 35, 50, 0.85);
+    border-bottom: 1px solid @border_glass;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 headerbar .title {
     color: @accent_cyan;
     font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 2px;
+    font-size: 13px;
+    letter-spacing: 1.5px;
 }
 
 /* ── Sidebar navigation ─────────────────────────────── */
 .nav-sidebar {
-    background-color: @bg_secondary;
-    border-right: 1px solid @border_subtle;
-    min-width: 160px;
+    background-color: rgba(26, 35, 50, 0.60);
+    border-right: 1px solid @border_glass;
+    min-width: 140px;
 }
 
 .nav-sidebar row {
-    padding: 4px 8px;
+    padding: 3px 6px;
     border-radius: 8px;
-    margin: 2px 8px;
+    margin: 1px 6px;
     transition: background-color 150ms ease;
 }
 
 .nav-sidebar row:hover {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
 .nav-sidebar row:selected {
-    background-color: rgba(0, 212, 255, 0.12);
-    border-left: 3px solid @accent_cyan;
+    background-color: rgba(77, 137, 255, 0.15);
+    border-left: 2px solid @accent_blue;
 }
 
 .nav-sidebar row:selected label {
@@ -74,140 +72,120 @@ headerbar .title {
 
 /* ── Cards ──────────────────────────────────────────── */
 .blocky-card {
-    background-color: @bg_card;
-    border: 1px solid @border_subtle;
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    transition: border-color 200ms ease, box-shadow 200ms ease;
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.30);
+    transition: border-color 150ms ease;
 }
 
 .blocky-card:hover {
-    border-color: @border_cyan;
-    box-shadow: 0 0 16px @glow_cyan;
+    border-color: rgba(0, 242, 255, 0.20);
 }
 
 .blocky-card.active {
-    border-color: @border_red;
-    box-shadow: 0 0 16px @glow_red;
+    border-color: rgba(255, 71, 87, 0.30);
 }
 
 .blocky-card.paused {
-    border-color: @border_subtle;
-    opacity: 0.7;
+    border-color: rgba(255, 255, 255, 0.06);
+    opacity: 0.65;
 }
 
 /* ── Status dots ─────────────────────────────────────── */
-@keyframes pulse-green {
-    0%   { box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.8); }
-    70%  { box-shadow: 0 0 0 8px rgba(57, 255, 20, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(57, 255, 20, 0); }
-}
-
-@keyframes pulse-red {
-    0%   { box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.8); }
-    70%  { box-shadow: 0 0 0 8px rgba(255, 51, 102, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 51, 102, 0); }
-}
-
 .status-dot {
-    min-width: 10px;
-    min-height: 10px;
+    min-width: 8px;
+    min-height: 8px;
     border-radius: 50%;
-    background-color: @text_muted;
+    background-color: @text_dim;
 }
 
 .status-dot.active {
-    background-color: @accent_green;
-    animation: pulse-green 2s infinite;
+    background-color: @accent_cyan;
 }
 
 .status-dot.blocked {
     background-color: @accent_red;
-    animation: pulse-red 2s infinite;
 }
 
 .status-dot.paused {
     background-color: @accent_orange;
 }
 
-/* ── Buttons ─────────────────────────────────────────── */
+/* ── Buttons ────────────────────────────────────────── */
 button {
     border-radius: 8px;
     transition: all 150ms ease;
 }
 
 button.suggested-action {
-    background-color: @accent_cyan;
-    color: @bg_primary;
-    font-weight: 700;
+    background: linear-gradient(135deg, #4D89FF, #2563EB);
+    color: #FFFFFF;
+    font-weight: 600;
     border: none;
-    box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
 }
 
 button.suggested-action:hover {
-    background-color: shade(@accent_cyan, 1.1);
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+    box-shadow: 0 4px 12px rgba(77, 137, 255, 0.30);
 }
 
 button.destructive-action {
     background-color: transparent;
     color: @accent_red;
-    border: 1px solid @border_red;
+    border: 1px solid rgba(255, 71, 87, 0.30);
 }
 
 button.destructive-action:hover {
-    background-color: @glow_red;
-    box-shadow: 0 0 12px @glow_red;
+    background-color: rgba(255, 71, 87, 0.08);
 }
 
 /* ── FAB (floating action button) ────────────────────── */
 .fab {
-    background-color: @accent_cyan;
-    color: @bg_primary;
+    background: linear-gradient(135deg, #4D89FF, #2563EB);
+    color: #FFFFFF;
     border-radius: 50%;
-    min-width: 56px;
-    min-height: 56px;
-    font-size: 24px;
-    font-weight: 900;
-    box-shadow: 0 0 24px rgba(0, 212, 255, 0.5);
+    min-width: 42px;
+    min-height: 42px;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(77, 137, 255, 0.30);
     border: none;
 }
 
 .fab:hover {
-    box-shadow: 0 0 36px rgba(0, 212, 255, 0.7);
+    box-shadow: 0 6px 16px rgba(77, 137, 255, 0.40);
 }
 
 /* ── Switches ─────────────────────────────────────────── */
 switch {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.10);
     border: 1px solid @border_subtle;
-    border-radius: 16px;
+    border-radius: 14px;
 }
 
 switch:checked {
-    background-color: @accent_green;
-    box-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+    background: linear-gradient(90deg, #4D89FF, #00F2FF);
 }
 
 switch slider {
-    background-color: @text_primary;
+    background-color: #FFFFFF;
     border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
 /* ── Entries ──────────────────────────────────────────── */
 entry {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
     border: 1px solid @border_subtle;
     border-radius: 8px;
     color: @text_primary;
     caret-color: @accent_cyan;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+    transition: border-color 150ms ease;
 }
 
 entry:focus {
-    border-color: @accent_cyan;
-    box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+    border-color: @accent_blue;
 }
 
 /* ── List boxes ───────────────────────────────────────── */
@@ -222,105 +200,107 @@ listbox row {
 }
 
 listbox row:hover {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 listbox row:selected {
-    background-color: rgba(0, 212, 255, 0.08);
+    background-color: rgba(77, 137, 255, 0.12);
 }
 
 /* ── Labels ───────────────────────────────────────────── */
 .heading {
     color: @text_primary;
-    font-weight: 700;
-    font-size: 18px;
+    font-weight: 600;
+    font-size: 15px;
 }
 
 .subheading {
-    color: @text_muted;
-    font-size: 12px;
-    letter-spacing: 1px;
+    color: @text_dim;
+    font-size: 11px;
+    letter-spacing: 0.8px;
     text-transform: uppercase;
 }
 
 .domain-label {
     color: @accent_cyan;
     font-family: monospace;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .app-name-label {
     color: @text_primary;
     font-weight: 600;
+    font-size: 13px;
 }
 
 .muted {
     color: @text_muted;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* ── Stat cards (dashboard) ───────────────────────────── */
 .stat-card {
-    background-color: @bg_card;
-    border-radius: 16px;
-    padding: 24px;
-    border: 1px solid @border_subtle;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.30);
 }
 
 .stat-number {
     color: @accent_cyan;
-    font-size: 48px;
-    font-weight: 900;
-    letter-spacing: -2px;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
 }
 
 .stat-number.danger {
     color: @accent_red;
-    text-shadow: 0 0 20px rgba(255, 51, 102, 0.6);
 }
 
 .stat-label {
-    color: @text_muted;
-    font-size: 12px;
-    letter-spacing: 1px;
+    color: @text_dim;
+    font-size: 11px;
+    letter-spacing: 0.8px;
     text-transform: uppercase;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 /* ── Badges / chips ───────────────────────────────────── */
 .badge {
-    border-radius: 20px;
-    padding: 2px 10px;
-    font-size: 11px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
 .badge.website {
-    background-color: rgba(0, 212, 255, 0.15);
+    background-color: rgba(0, 242, 255, 0.12);
     color: @accent_cyan;
-    border: 1px solid rgba(0, 212, 255, 0.3);
+    border: 1px solid rgba(0, 242, 255, 0.25);
 }
 
 .badge.app {
-    background-color: rgba(157, 78, 221, 0.15);
-    color: @accent_purple;
-    border: 1px solid rgba(157, 78, 221, 0.3);
+    background-color: rgba(197, 197, 255, 0.12);
+    color: @accent_lavender;
+    border: 1px solid rgba(197, 197, 255, 0.25);
 }
 
 .badge.scheduled {
-    background-color: rgba(255, 107, 53, 0.15);
+    background-color: rgba(255, 112, 67, 0.12);
     color: @accent_orange;
-    border: 1px solid rgba(255, 107, 53, 0.3);
+    border: 1px solid rgba(255, 112, 67, 0.25);
 }
 
 /* ── Permission banner ────────────────────────────────── */
 .permission-banner {
-    background-color: rgba(255, 107, 53, 0.12);
-    border: 1px solid rgba(255, 107, 53, 0.3);
-    border-radius: 10px;
-    padding: 12px 16px;
+    background-color: rgba(255, 112, 67, 0.10);
+    border: 1px solid rgba(255, 112, 67, 0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
     color: @accent_orange;
+    font-size: 11px;
 }
 
 /* ── Scrollbars ───────────────────────────────────────── */
@@ -329,58 +309,58 @@ scrollbar {
 }
 
 scrollbar > trough > slider {
-    background-color: @border_subtle;
+    background-color: rgba(255, 255, 255, 0.12);
     border-radius: 4px;
     min-width: 6px;
     min-height: 6px;
 }
 
 scrollbar > trough > slider:hover {
-    background-color: @text_muted;
+    background-color: rgba(255, 255, 255, 0.22);
 }
 
 /* ── Dialog ───────────────────────────────────────────── */
 dialog {
     background-color: @bg_secondary;
-    border: 1px solid @border_cyan;
-    border-radius: 16px;
-    box-shadow: 0 0 40px rgba(0, 212, 255, 0.15);
+    border: 1px solid rgba(0, 242, 255, 0.15);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
 }
 
 /* ── App picker flowbox ───────────────────────────────── */
 .app-picker-item {
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 8px;
     border: 1px solid transparent;
     transition: all 150ms ease;
 }
 
 .app-picker-item:hover {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
     border-color: @border_subtle;
 }
 
 .app-picker-item:selected {
-    background-color: rgba(0, 212, 255, 0.12);
-    border-color: @border_cyan;
+    background-color: rgba(77, 137, 255, 0.12);
+    border-color: rgba(77, 137, 255, 0.30);
 }
 
 /* ── Day toggles (schedule) ───────────────────────────── */
 .day-toggle {
-    border-radius: 8px;
-    min-width: 36px;
-    min-height: 36px;
-    font-weight: 700;
-    font-size: 11px;
+    border-radius: 6px;
+    min-width: 28px;
+    min-height: 28px;
+    font-weight: 600;
+    font-size: 10px;
     border: 1px solid @border_subtle;
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
     color: @text_muted;
     padding: 0;
 }
 
 .day-toggle:checked {
-    background-color: rgba(0, 212, 255, 0.15);
-    border-color: @accent_cyan;
+    background-color: rgba(77, 137, 255, 0.15);
+    border-color: @accent_blue;
     color: @accent_cyan;
 }
 
@@ -391,19 +371,19 @@ separator {
 
 /* ── Spinbutton ────────────────────────────────────────── */
 spinbutton {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
     border: 1px solid @border_subtle;
     border-radius: 8px;
     color: @text_primary;
 }
 
 spinbutton:focus {
-    border-color: @accent_cyan;
+    border-color: @accent_blue;
 }
 
 /* ── ComboBox / DropDown ──────────────────────────────── */
 combobox, dropdownbutton {
-    background-color: @bg_tertiary;
+    background-color: rgba(255, 255, 255, 0.06);
     border: 1px solid @border_subtle;
     border-radius: 8px;
     color: @text_primary;
@@ -412,10 +392,10 @@ combobox, dropdownbutton {
 /* ── Toast ─────────────────────────────────────────────── */
 .toast {
     background-color: @bg_tertiary;
-    border: 1px solid @border_cyan;
-    border-radius: 10px;
+    border: 1px solid rgba(0, 242, 255, 0.15);
+    border-radius: 8px;
     color: @text_primary;
-    box-shadow: 0 0 16px rgba(0, 212, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* ── Activity log rows ─────────────────────────────────── */
@@ -431,7 +411,7 @@ combobox, dropdownbutton {
 }
 
 .activity-action.activated {
-    color: @accent_green;
+    color: @accent_cyan;
 }
 
 .activity-action.paused {

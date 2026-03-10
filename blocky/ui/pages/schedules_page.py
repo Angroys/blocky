@@ -19,10 +19,10 @@ class SchedulesPage(Gtk.Box):
 
     def _build_ui(self) -> None:
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        toolbar.set_margin_top(16)
-        toolbar.set_margin_bottom(8)
-        toolbar.set_margin_start(24)
-        toolbar.set_margin_end(24)
+        toolbar.set_margin_top(12)
+        toolbar.set_margin_bottom(6)
+        toolbar.set_margin_start(16)
+        toolbar.set_margin_end(16)
 
         title = Gtk.Label(label="Manage time-based blocking schedules", xalign=0)
         title.add_css_class("muted")
@@ -42,9 +42,9 @@ class SchedulesPage(Gtk.Box):
 
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.list_box.set_margin_start(24)
-        self.list_box.set_margin_end(24)
-        self.list_box.set_margin_bottom(24)
+        self.list_box.set_margin_start(16)
+        self.list_box.set_margin_end(16)
+        self.list_box.set_margin_bottom(16)
 
         scroll.set_child(self.list_box)
         self.append(scroll)
@@ -84,15 +84,13 @@ class SchedulesPage(Gtk.Box):
     def _make_schedule_row(self, schedule: Schedule, rules) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow()
         row.set_selectable(False)
-        row.set_margin_bottom(6)
+        row.set_margin_bottom(4)
 
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card.add_css_class("blocky-card")
-        card.set_margin_top(2)
-        card.set_margin_bottom(2)
 
         # Header row
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
 
         name_lbl = Gtk.Label(label=schedule.name, xalign=0)
         name_lbl.add_css_class("app-name-label")

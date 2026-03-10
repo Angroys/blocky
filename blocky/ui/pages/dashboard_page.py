@@ -14,19 +14,15 @@ class DashboardPage(Gtk.Box):
         self.refresh()
 
     def _build_ui(self) -> None:
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         content.set_vexpand(True)
         content.set_valign(Gtk.Align.CENTER)
-        content.set_margin_top(32)
-        content.set_margin_bottom(32)
-        content.set_margin_start(40)
-        content.set_margin_end(40)
+        content.set_margin_top(24)
+        content.set_margin_bottom(24)
+        content.set_margin_start(32)
+        content.set_margin_end(32)
 
-        hero = Gtk.Label(label="SYSTEM SHIELD")
-        hero.add_css_class("subheading")
-        content.append(hero)
-
-        stats_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        stats_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         stats_row.set_homogeneous(True)
 
         self.total_card = self._make_stat_card("0", "ACTIVE BLOCKS")

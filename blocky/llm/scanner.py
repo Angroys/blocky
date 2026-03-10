@@ -19,10 +19,13 @@ Link pre-scanning:
 
 import asyncio
 import html.parser
+import json
 import logging
 import socket
 import ssl
 import threading
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlparse
 
@@ -31,6 +34,79 @@ import httpx
 from blocky.engine.helper_client import HelperError, run_helper
 
 logger = logging.getLogger(__name__)
+
+# ── Scan log ─────────────────────────────────────────────────────────────────
+
+_SCAN_LOG_DIR = Path.home() / ".local" / "share" / "blocky"
+_SCAN_LOG_PATH = _SCAN_LOG_DIR / "scan_log.jsonl"
+_SCAN_LOG_MAX_SIZE = 5 * 1024 * 1024  # 5 MB — rotate when exceeded
+
+
+_CONTENT_LOG_DIR = _SCAN_LOG_DIR / "page_content"
+
+
+def _log_scan(
+    domain: str,
+    result: str,
+    method: str,
+    confidence: float = 0.0,
+    reason: str = "",
+    source: str = "live",
+    page_text: str = "",
+) -> None:
+    """Append one scan record to the JSONL log file.
+
+    *result*: "blocked", "safe", "skipped", "error"
+    *method*: "keyword-domain", "keyword-content", "llm", "image", "cached",
+              "cdn", "cdn-cert", "cdn-rdns", "no-rdns",
+              "category", "already-blocked", "no-content"
+    *source*: "live" (real-time connection) or "prescan" (background link scan)
+    *page_text*: extracted page text (saved to separate file for analysis)
+    """
+    try:
+        _SCAN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        # Simple rotation: if the file exceeds max size, rename to .old
+        if _SCAN_LOG_PATH.exists() and _SCAN_LOG_PATH.stat().st_size > _SCAN_LOG_MAX_SIZE:
+            old = _SCAN_LOG_PATH.with_suffix(".jsonl.old")
+            _SCAN_LOG_PATH.rename(old)
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "domain": domain,
+            "result": result,
+            "method": method,
+            "confidence": round(confidence, 3),
+            "reason": reason,
+            "source": source,
+        }
+        with open(_SCAN_LOG_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+        # Save page content for pattern analysis (only for classified domains)
+        if page_text and method in ("llm", "all-checks", "keyword-content"):
+            _save_page_content(domain, result, page_text)
+    except Exception:
+        pass  # never let logging break the scanner
+
+
+def _save_page_content(domain: str, result: str, page_text: str) -> None:
+    """Save extracted page text to a file for offline pattern analysis."""
+    try:
+        _CONTENT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        safe_name = domain.replace("/", "_").replace(":", "_")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        path = _CONTENT_LOG_DIR / f"{result}_{safe_name}_{ts}.txt"
+        with open(path, "w") as f:
+            f.write(f"Domain: {domain}\n")
+            f.write(f"Result: {result}\n")
+            f.write(f"Time: {ts}\n")
+            f.write("=" * 60 + "\n")
+            f.write(page_text[:5000])
+        # Keep directory manageable — delete oldest if >200 files
+        files = sorted(_CONTENT_LOG_DIR.iterdir(), key=lambda p: p.stat().st_mtime)
+        for old in files[:-200]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 # ── HTML parsing ──────────────────────────────────────────────────────────────
 
@@ -62,7 +138,153 @@ _CDN_SUFFIXES = (
     "tailscale.com",
     "your-server.de",
     "clients.your-server.de",
+    "azureedge.net",
+    "azure.com",
+    "microsoft.com",
+    "msedge.net",
+    "windows.net",
+    "office.net",
+    "office.com",
+    "live.com",
+    "digicert.com",
+    "verisign.com",
+    "letsencrypt.org",
+    "sentry.io",
+    "datadoghq.com",
+    "newrelic.com",
+    "nr-data.net",
+    "segment.io",
+    "segment.com",
+    "doubleclick.net",
+    "googlesyndication.com",
+    "googleadservices.com",
+    "google-analytics.com",
+    "googletagmanager.com",
+    "gstatic.com",
+    "googleapis.com",
+    "google.com",
+    "gvt1.com",
+    "gvt2.com",
+    "apple.com",
+    "icloud.com",
+    "mzstatic.com",
+    "mozilla.com",
+    "mozilla.org",
+    "mozilla.net",
+    "firefox.com",
+    "firefox.settings.services.mozilla.com",
+    "yandex.ru",
+    "yandex.net",
+    "yandex.com",
+    "yandex.md",
+    "ya.ru",
+    "yango.com",
+    "yango.tech",
+    "meteum.ai",
 )
+
+# Well-known infrastructure / service domains the LLM should never classify.
+# These produce no meaningful page content and waste API tokens.
+_SKIP_DOMAINS = frozenset({
+    "push.services.mozilla.com",
+    "detectportal.firefox.com",
+    "contile.services.mozilla.com",
+    "shavar.services.mozilla.com",
+    "tracking-protection.cdn.mozilla.net",
+    "aus5.mozilla.org",
+    "balrog.services.mozilla.com",
+    "safebrowsing.googleapis.com",
+    "ocsp.pki.goog",
+    "accounts.google.com",
+    "clients1.google.com",
+    "clients2.google.com",
+    "update.googleapis.com",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "connectivitycheck.gstatic.com",
+    "play.googleapis.com",
+    "firebaseinstallations.googleapis.com",
+    "fcm.googleapis.com",
+    "android.clients.google.com",
+    "dns.google",
+    "ocsp.digicert.com",
+    "ocsp.sectigo.com",
+    "ocsp.usertrust.com",
+    "crl.microsoft.com",
+    "login.microsoftonline.com",
+    "graph.microsoft.com",
+    "settings-win.data.microsoft.com",
+    "self.events.data.microsoft.com",
+    "vortex.data.microsoft.com",
+    "config.edge.skype.com",
+    "edge.microsoft.com",
+    "api.github.com",
+    "github.com",
+    "raw.githubusercontent.com",
+    "objects.githubusercontent.com",
+    "alive.github.com",
+    "collector.github.com",
+    "lastpass.com",
+    "lastpass.eu",
+    "bitwarden.com",
+    "1password.com",
+    "sentry.io",
+    "cloudflareinsights.com",
+    "plausible.io",
+    "analytics.google.com",
+    "challenges.cloudflare.com",
+    "cdn.jsdelivr.net",
+    "unpkg.com",
+    "cdnjs.cloudflare.com",
+    "r2.dev",
+    "docker.io",
+    "docker.com",
+    "registry.npmjs.org",
+    "pypi.org",
+    "rubygems.org",
+    "crates.io",
+    "packagist.org",
+    "api.snapcraft.io",
+    "flathub.org",
+    "archlinux.org",
+    "aur.archlinux.org",
+    "deb.debian.org",
+    "ubuntu.com",
+    "fedoraproject.org",
+    "ntp.org",
+    "pool.ntp.org",
+    "time.google.com",
+    "time.windows.com",
+    "ipinfo.io",
+    "ifconfig.me",
+    "icanhazip.com",
+    "wttr.in",
+    "openai.com",
+    "api.openai.com",
+    "anthropic.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+    "api.groq.com",
+    "api.x.ai",
+    # URL shorteners & wikimedia
+    "w.wiki",
+    "t.co",
+    "bit.ly",
+    "goo.gl",
+    "tinyurl.com",
+    "is.gd",
+    "wikimedia.org",
+    "wikipedia.org",
+    "wikidata.org",
+    "mediawiki.org",
+    # CDN / caching
+    "ttcache.com",
+    "akamai.net",
+    "edgekey.net",
+    "edgesuite.net",
+    "steamcontent.com",
+    "steamstatic.com",
+})
 
 _BOGUS_TLDS = frozenset({
     "invalid", "local", "localhost", "test", "example",
@@ -82,9 +304,13 @@ PRESCAN_QUEUE_MAX = 500
 # ── HTML text extractor ───────────────────────────────────────────────────────
 
 class _HTMLTextExtractor(html.parser.HTMLParser):
+    """Extract structured text (title, meta, body) from HTML for LLM classification."""
+
     def __init__(self) -> None:
         super().__init__()
-        self._parts: list[str] = []
+        self._title_parts: list[str] = []
+        self._meta_parts: list[str] = []
+        self._body_parts: list[str] = []
         self._skip_depth = 0
         self._in_title = False
 
@@ -102,7 +328,7 @@ class _HTMLTextExtractor(html.parser.HTMLParser):
             if key in _META_KEEP:
                 content = d.get("content", "").strip()
                 if content:
-                    self._parts.append(content)
+                    self._meta_parts.append(content)
 
     def handle_endtag(self, tag: str) -> None:
         t = tag.lower()
@@ -112,22 +338,37 @@ class _HTMLTextExtractor(html.parser.HTMLParser):
             self._in_title = False
 
     def handle_data(self, data: str) -> None:
-        if self._in_title or self._skip_depth == 0:
-            s = data.strip()
-            if s:
-                self._parts.append(s)
+        s = data.strip()
+        if not s:
+            return
+        if self._in_title:
+            self._title_parts.append(s)
+        elif self._skip_depth == 0:
+            self._body_parts.append(s)
 
-    def result(self) -> str:
-        return " ".join(self._parts)
+    def result(self, max_chars: int = 1800) -> str:
+        """Return structured text with labeled Title/Meta/Content sections."""
+        sections: list[str] = []
+        title = " ".join(self._title_parts).strip()
+        if title:
+            sections.append(f"Title: {title}")
+        meta = " | ".join(self._meta_parts)
+        if meta:
+            sections.append(f"Meta: {meta}")
+        body = " ".join(self._body_parts).strip()
+        if body:
+            sections.append(f"Content: {body}")
+        return "\n".join(sections)[:max_chars]
 
 
-def _extract_text(html_content: str, max_chars: int = 1000) -> str:
+def _extract_text(html_content: str, max_chars: int = 1800) -> str:
+    """Extract structured text from HTML for LLM classification."""
     extractor = _HTMLTextExtractor()
     try:
         extractor.feed(html_content)
     except Exception:
         pass
-    return extractor.result()[:max_chars]
+    return extractor.result(max_chars)
 
 
 # ── Link extractor ────────────────────────────────────────────────────────────
@@ -216,41 +457,53 @@ def _parse_proc_net(path: str) -> set[tuple[str, int]]:
 
 # ── TLS cert domain extraction ────────────────────────────────────────────────
 
-def _cert_domains(ip: str) -> list[str]:
+def _cert_domains(ip: str) -> tuple[list[str], list[str]]:
+    """Return (usable_domains, all_raw_domains) from the TLS cert at *ip*:443.
+
+    usable_domains: non-CDN domains suitable for classification.
+    all_raw_domains: every SAN/CN entry (for logging when usable is empty).
+    """
     from cryptography import x509 as _x509
     from cryptography.x509.oid import NameOID
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    domains: list[str] = []
+    usable: list[str] = []
+    raw_all: list[str] = []
     try:
         with socket.create_connection((ip, 443), timeout=2) as raw:
             with ctx.wrap_socket(raw) as tls:
                 der = tls.getpeercert(binary_form=True)
                 if not der:
-                    return []
+                    return [], []
                 cert = _x509.load_der_x509_certificate(der)
                 try:
                     san_ext = cert.extensions.get_extension_for_class(_x509.SubjectAlternativeName)
                     for name in san_ext.value.get_values_for_type(_x509.DNSName):
                         d = name.lower().lstrip("*.")
-                        if "." in d and not _is_cdn_hostname(d):
-                            domains.append(d)
+                        if "." in d:
+                            raw_all.append(d)
+                            if not _is_cdn_hostname(d):
+                                usable.append(d)
                 except _x509.ExtensionNotFound:
                     pass
-                if not domains:
+                if not usable:
                     for attr in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME):
                         d = attr.value.lower().lstrip("*.")
-                        if "." in d and not _is_cdn_hostname(d):
-                            domains.append(d)
+                        if "." in d:
+                            raw_all.append(d)
+                            if not _is_cdn_hostname(d):
+                                usable.append(d)
     except Exception:
         pass
-    return domains
+    return usable, raw_all
 
 
 def _is_cdn_hostname(hostname: str) -> bool:
-    if any(hostname.endswith(s) for s in _CDN_SUFFIXES):
+    if hostname in _SKIP_DOMAINS:
+        return True
+    if any(hostname.endswith(f".{s}") or hostname == s for s in _CDN_SUFFIXES):
         return True
     tld = hostname.rsplit(".", 1)[-1]
     return tld in _BOGUS_TLDS
@@ -311,8 +564,11 @@ class DomainScanner(threading.Thread):
         provider_name: str,
         confidence_threshold: float,
         on_adult: Callable[[str, str, Optional[str]], None],
-        scan_interval: float = 3.0,
+        scan_interval: float = 1.5,
         prescan_limit: int = 0,   # 0 = unlimited; >0 caps domains queued per page
+        image_scanner_enabled: bool = False,
+        image_confidence_threshold: float = 0.75,
+        image_max_per_page: int = 5,
     ) -> None:
         super().__init__(daemon=True, name="llm-domain-scanner")
         self.db = db
@@ -323,13 +579,25 @@ class DomainScanner(threading.Thread):
         self.scan_interval = scan_interval
         self.prescan_limit = prescan_limit
         self._stop_event = threading.Event()
-        self._seen_pairs: set[tuple[str, int]] = set()   # cleared every scan cycle
-        self._links_extracted: set[str] = set()           # cleared every _LINKS_TTL
+        self._seen_pairs: set[tuple[str, int]] = set()
+        self._links_extracted: set[str] = set()
         self._links_expiry: float = 0.0
-        self._safe_cache: dict[str, float] = {}           # domain → expiry (monotonic)
+        self._safe_cache: dict[str, float] = {}
         self._in_flight: set[str] = set()
         self._llm_sem: Optional[asyncio.Semaphore] = None
         self._prescan_queue: Optional[asyncio.Queue] = None
+
+        # Image scanner
+        self._nsfw_classifier = None
+        self._image_threshold = image_confidence_threshold
+        self._image_max = image_max_per_page
+        if image_scanner_enabled:
+            try:
+                from blocky.llm.image_scanner import NSFWClassifier
+                self._nsfw_classifier = NSFWClassifier()
+                logger.info("NSFW image scanner enabled (threshold=%.2f)", image_confidence_threshold)
+            except Exception as e:
+                logger.warning("Could not initialize NSFW image scanner: %s", e)
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -341,7 +609,7 @@ class DomainScanner(threading.Thread):
         )
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        self._llm_sem = asyncio.Semaphore(1)
+        self._llm_sem = asyncio.Semaphore(3)
         self._prescan_queue = asyncio.Queue(maxsize=PRESCAN_QUEUE_MAX)
         try:
             loop.run_until_complete(self._scan_loop())
@@ -351,16 +619,18 @@ class DomainScanner(threading.Thread):
 
     # ── Main scan loop ────────────────────────────────────────────────────────
 
-    # Seconds before _seen_pairs is cleared so navigating to a new page
     # Links-extracted TTL: prevents re-fetching HTML when a domain has many IPs.
     _LINKS_TTL = 120.0
     # Safe-domain re-check interval: how long before re-classifying a "safe" domain.
-    _SAFE_TTL = 60.0
+    _SAFE_TTL = 300.0
+    # How often to clear _seen_pairs so closed+reopened connections are re-checked
+    _SEEN_TTL = 30.0
 
     async def _scan_loop(self) -> None:
         import time
         # Start pre-scan background worker
         prescan_task = asyncio.ensure_future(self._prescan_worker())
+        seen_expiry = time.monotonic() + self._SEEN_TTL
         try:
             while not self._stop_event.is_set():
                 try:
@@ -373,10 +643,10 @@ class DomainScanner(threading.Thread):
                     expired = [d for d, exp in self._safe_cache.items() if now >= exp]
                     for d in expired:
                         del self._safe_cache[d]
-
-                    # Clear _seen_pairs every cycle so every new TCP connection
-                    # (new page open) is always processed afresh.
-                    self._seen_pairs.clear()
+                    # Periodically clear seen pairs so re-visits are caught
+                    if now >= seen_expiry:
+                        self._seen_pairs.clear()
+                        seen_expiry = now + self._SEEN_TTL
 
                     pairs: set[tuple[str, int]] = set()
                     for path in ("/proc/net/tcp", "/proc/net/tcp6"):
@@ -406,10 +676,17 @@ class DomainScanner(threading.Thread):
         domain: Optional[str] = None
 
         if port == 443:
-            cert_domains = await loop.run_in_executor(None, _cert_domains, ip)
-            if cert_domains:
-                domain = min(cert_domains, key=len)
+            usable, raw_all = await loop.run_in_executor(None, _cert_domains, ip)
+            if usable:
+                domain = min(usable, key=len)
                 logger.debug("SSL cert domain for %s: %s", ip, domain)
+            elif raw_all:
+                # All cert SANs are CDN — log so user can see what was missed
+                _log_scan(
+                    raw_all[0], "skipped", "cdn-cert",
+                    reason=f"ip={ip} cert SANs all CDN: {', '.join(raw_all[:5])}",
+                )
+                logger.debug("All cert SANs are CDN for %s: %s", ip, raw_all[:5])
 
         if domain is None:
             try:
@@ -422,9 +699,17 @@ class DomainScanner(threading.Thread):
                 if "." in hostname and not _is_cdn_hostname(hostname):
                     domain = hostname
                 else:
+                    _log_scan(
+                        hostname, "skipped", "cdn-rdns",
+                        reason=f"ip={ip} reverse DNS is CDN: {hostname}",
+                    )
                     logger.debug("Skipping CDN/unresolvable host for %s: %s", ip, hostname)
                     return
             except (socket.herror, socket.gaierror, OSError):
+                _log_scan(
+                    ip, "skipped", "no-rdns",
+                    reason=f"ip={ip} no reverse DNS and no cert domain",
+                )
                 return
 
         if not domain or "." not in domain:
@@ -452,21 +737,62 @@ class DomainScanner(threading.Thread):
 
         html: Optional[str] = None
         temp_blocked = False
-        cls = None
+        is_adult = False
+        confidence = 0.0
+        reason = ""
+        has_real_content = False
+
         try:
-            # 3. Fetch HTML FIRST — before the temp block so our own httpx
-            #    connection isn't caught by the DROP rule ─────────────────────
+            # 3. Keyword pre-filter on domain name (instant, no network) ───
+            from blocky.llm.keyword_filter import check_domain, check_content
+            if need_classify and check_domain(domain):
+                is_adult = True
+                confidence = 0.95
+                reason = f"Adult keyword in domain name: {domain}"
+                _log_scan(domain, "blocked", "keyword-domain", confidence, reason, "live")
+                logger.info("Keyword filter blocked domain: %s", domain)
+
+            # 4. Fetch HTML ────────────────────────────────────────────────
             html = await _fetch_html(domain)
 
-            if need_classify:
-                text = _extract_text(html) if html else None
-                has_real_content = bool(text)
-                if not text:
-                    logger.info("LLM scanner: no page text for %s, classifying domain name only", domain)
-                    text = f"Domain: {domain}"
-                text = text[:1000]
+            # 5. Keyword pre-filter on page content ────────────────────────
+            if need_classify and not is_adult and html:
+                page_text = _extract_text(html)
+                has_real_content = bool(page_text.strip())
+                if has_real_content:
+                    # Extract title from page_text (first line after "Title: ")
+                    title = ""
+                    meta = ""
+                    body = page_text
+                    for line in page_text.split("\n"):
+                        if line.startswith("Title: "):
+                            title = line[7:]
+                        elif line.startswith("Meta: "):
+                            meta = line[6:]
+                        elif line.startswith("Content: "):
+                            body = line[9:]
+                    kw_adult, kw_reason = check_content(title, meta, body)
+                    if kw_adult:
+                        is_adult = True
+                        confidence = 0.92
+                        reason = kw_reason
+                        _log_scan(domain, "blocked", "keyword-content", confidence, reason, "live", page_text)
+                        logger.info("Keyword filter blocked %s: %s", domain, kw_reason)
 
-                # 4. Temp DROP the browser NOW (while LLM call is in-flight) ──
+            # 6. LLM classification (if available and not already blocked) ─
+            if need_classify and not is_adult and self.agent:
+                page_text = _extract_text(html) if html else ""
+                has_real_content = bool(page_text.strip())
+                if not has_real_content:
+                    text = (
+                        f"Domain: {domain}\n"
+                        "No page content could be retrieved. Classify based on the domain name alone.\n"
+                        "If the domain name clearly indicates adult content, classify accordingly."
+                    )
+                else:
+                    text = f"Domain: {domain}\n{page_text}"[:2000]
+
+                # Temp DROP the browser while LLM call is in-flight
                 try:
                     await loop.run_in_executor(
                         None, lambda: run_helper("iptables_temp_block", ip=ip)
@@ -475,13 +801,45 @@ class DomainScanner(threading.Thread):
                 except Exception:
                     pass
 
-                # 5. Classify ─────────────────────────────────────────────────
-                async with self._llm_sem:
-                    result = await self.agent.run(text)
-                cls = result.output
+                try:
+                    async with self._llm_sem:
+                        result = await self.agent.run(text)
+                    cls = result.output
+                    if cls.is_adult and cls.confidence >= self.confidence_threshold:
+                        is_adult = True
+                        confidence = cls.confidence
+                        reason = cls.reason
+                        _log_scan(domain, "blocked", "llm", confidence, reason, "live", page_text)
+                    else:
+                        _log_scan(domain, "safe", "llm", cls.confidence, cls.reason, "live", page_text)
+                except Exception as e:
+                    _log_scan(domain, "error", "llm", 0, str(e), "live")
+                    logger.warning("LLM classification error for %s: %s", domain, e)
+
+            # 7. Image NSFW scan (if enabled and not already blocked) ──────
+            if need_classify and not is_adult and self._nsfw_classifier and html:
+                try:
+                    from blocky.llm.image_scanner import classify_page_images
+                    img_nsfw, img_score, img_reason = await classify_page_images(
+                        domain, html, self._nsfw_classifier,
+                        threshold=self._image_threshold,
+                        max_images=self._image_max,
+                    )
+                    if img_nsfw:
+                        is_adult = True
+                        confidence = img_score
+                        reason = img_reason
+                        _log_scan(domain, "blocked", "image", confidence, reason, "live")
+                        logger.info("Image scanner blocked %s: %s", domain, img_reason)
+                    else:
+                        _log_scan(domain, "safe", "image", img_score, "below threshold", "live")
+                except Exception as e:
+                    _log_scan(domain, "error", "image", 0, str(e), "live")
+                    logger.debug("Image scan error for %s: %s", domain, e)
 
         except Exception as e:
-            logger.warning("LLM classification error for %s: %s", domain, e)
+            _log_scan(domain, "error", "scanner", 0, str(e), "live")
+            logger.warning("Scanner error for %s: %s", domain, e)
             self._in_flight.discard(domain)
             if temp_blocked:
                 try:
@@ -492,38 +850,34 @@ class DomainScanner(threading.Thread):
                     pass
             return
 
-        if need_classify and cls is not None:
+        # 8. Record result and act ─────────────────────────────────────────
+        if need_classify:
             import time
             self._in_flight.discard(domain)
-            is_adult = cls.is_adult and cls.confidence >= self.confidence_threshold
             if is_adult:
-                # Permanent DB record — domain stays blocked across restarts
-                self.db.set_llm_cache(domain, True, cls.confidence, self.provider_name)
-            elif has_real_content:
-                # Safe with real content: short in-memory TTL, re-check after _SAFE_TTL
-                self._safe_cache[domain] = time.monotonic() + self._SAFE_TTL
-            else:
-                # No real content (CloudFlare/403): don't cache at all — retry next visit
-                logger.info("LLM scanner: %s — no real content, will retry on next visit", domain)
-                self._links_extracted.discard(domain)
-
-        # 6. Extract links — always when we have HTML ─────────────────────────
-        if html and need_links:
-            self._enqueue_links(html, domain, depth=PRESCAN_DEPTH)
-
-        if need_classify and cls is not None:
-            is_adult = cls.is_adult and cls.confidence >= self.confidence_threshold
-            if is_adult:
+                self.db.set_llm_cache(domain, True, confidence, self.provider_name)
                 logger.info(
-                    "LLM detected adult domain: %s (confidence=%.2f, reason=%s)",
-                    domain, cls.confidence, cls.reason,
+                    "Blocked adult domain: %s (confidence=%.2f, reason=%s)",
+                    domain, confidence, reason,
                 )
-                # Permanent block supersedes the temp DROP — no need to unblock
-                self.on_adult(domain, cls.reason, ip)
-            else:
-                logger.debug("LLM classified %s as safe (confidence=%.2f)", domain, cls.confidence)
+                self.on_adult(domain, reason, ip)
+            elif has_real_content:
+                self.db.set_llm_cache(domain, False, confidence, self.provider_name)
+                self._safe_cache[domain] = time.monotonic() + self._SAFE_TTL
+                pt = _extract_text(html) if html else ""
+                _log_scan(domain, "safe", "all-checks", confidence, "passed all filters", "live", pt)
                 if temp_blocked:
                     await self._temp_unblock(ip, loop)
+            else:
+                _log_scan(domain, "skipped", "no-content", 0, "no real page content", "live")
+                logger.info("LLM scanner: %s — no real content, will retry on next visit", domain)
+                self._links_extracted.discard(domain)
+                if temp_blocked:
+                    await self._temp_unblock(ip, loop)
+
+        # 9. Extract links — always when we have HTML ─────────────────────
+        if html and need_links:
+            self._enqueue_links(html, domain, depth=PRESCAN_DEPTH)
 
     # ── Pre-scan worker (background, no temp block) ───────────────────────────
 
@@ -553,69 +907,145 @@ class DomainScanner(threading.Thread):
             return
         self._in_flight.add(domain)
 
-        logger.debug("LLM pre-scan: classifying %s (depth=%d remaining)", domain, depth)
+        from blocky.llm.keyword_filter import check_domain, check_content
 
+        is_adult = False
+        confidence = 0.0
+        reason = ""
+        has_real_content = False
         html: Optional[str] = None
-        try:
-            html = await _fetch_html(domain)
-            text = _extract_text(html) if html else None
-            has_real_content = bool(text)
-            if not text:
-                text = f"Domain: {domain}"
-            text = text[:1000]
 
-            async with self._llm_sem:
-                result = await self.agent.run(text)
-            cls = result.output
+        try:
+            # Keyword check on domain name
+            if check_domain(domain):
+                is_adult = True
+                confidence = 0.95
+                reason = f"Adult keyword in domain: {domain}"
+                _log_scan(domain, "blocked", "keyword-domain", confidence, reason, "prescan")
+
+            html = await _fetch_html(domain)
+
+            # Keyword check on content
+            if not is_adult and html:
+                page_text = _extract_text(html)
+                has_real_content = bool(page_text.strip())
+                if has_real_content:
+                    title, meta, body = "", "", page_text
+                    for line in page_text.split("\n"):
+                        if line.startswith("Title: "):
+                            title = line[7:]
+                        elif line.startswith("Meta: "):
+                            meta = line[6:]
+                        elif line.startswith("Content: "):
+                            body = line[9:]
+                    kw_adult, kw_reason = check_content(title, meta, body)
+                    if kw_adult:
+                        is_adult = True
+                        confidence = 0.92
+                        reason = kw_reason
+                        _log_scan(domain, "blocked", "keyword-content", confidence, reason, "prescan", page_text)
+
+            # LLM classification
+            if not is_adult and self.agent:
+                page_text = _extract_text(html) if html else ""
+                has_real_content = bool(page_text.strip())
+                if not has_real_content:
+                    text = (
+                        f"Domain: {domain}\n"
+                        "No page content could be retrieved. Classify based on the domain name alone.\n"
+                        "If the domain name clearly indicates adult content, classify accordingly."
+                    )
+                else:
+                    text = f"Domain: {domain}\n{page_text}"[:2000]
+
+                try:
+                    async with self._llm_sem:
+                        result = await self.agent.run(text)
+                    cls = result.output
+                    if cls.is_adult and cls.confidence >= self.confidence_threshold:
+                        is_adult = True
+                        confidence = cls.confidence
+                        reason = cls.reason
+                        _log_scan(domain, "blocked", "llm", confidence, reason, "prescan", page_text)
+                    elif has_real_content:
+                        confidence = cls.confidence
+                        _log_scan(domain, "safe", "llm", confidence, cls.reason, "prescan", page_text)
+                except Exception as e:
+                    _log_scan(domain, "error", "llm", 0, str(e), "prescan")
+                    logger.debug("LLM pre-scan error for %s: %s", domain, e)
+
+            # Image NSFW scan
+            if not is_adult and self._nsfw_classifier and html:
+                try:
+                    from blocky.llm.image_scanner import classify_page_images
+                    img_nsfw, img_score, img_reason = await classify_page_images(
+                        domain, html, self._nsfw_classifier,
+                        threshold=self._image_threshold,
+                        max_images=self._image_max,
+                    )
+                    if img_nsfw:
+                        is_adult = True
+                        confidence = img_score
+                        reason = img_reason
+                        _log_scan(domain, "blocked", "image", confidence, reason, "prescan")
+                    else:
+                        _log_scan(domain, "safe", "image", img_score, "below threshold", "prescan")
+                except Exception as e:
+                    _log_scan(domain, "error", "image", 0, str(e), "prescan")
+                    logger.debug("Image pre-scan error for %s: %s", domain, e)
 
         except Exception as e:
-            logger.debug("LLM pre-scan classification error for %s: %s", domain, e)
+            logger.debug("Pre-scan error for %s: %s", domain, e)
             self._in_flight.discard(domain)
             return
 
         import time
         self._in_flight.discard(domain)
-        is_adult = cls.is_adult and cls.confidence >= self.confidence_threshold
         if is_adult:
-            self.db.set_llm_cache(domain, True, cls.confidence, self.provider_name)
+            self.db.set_llm_cache(domain, True, confidence, self.provider_name)
+            logger.info("Pre-scan blocked: %s (confidence=%.2f, reason=%s)", domain, confidence, reason)
+            self.on_adult(domain, reason, None)
         elif has_real_content:
+            self.db.set_llm_cache(domain, False, confidence, self.provider_name)
             self._safe_cache[domain] = time.monotonic() + self._SAFE_TTL
+            pt = _extract_text(html) if html else ""
+            _log_scan(domain, "safe", "all-checks", confidence, "passed all filters", "prescan", pt)
+            logger.info("Pre-scan: %s → safe (confidence=%.2f)", domain, confidence)
         else:
-            logger.debug("LLM pre-scan: %s — no real content, skipping cache", domain)
+            _log_scan(domain, "skipped", "no-content", 0, "no real page content", "prescan")
+            logger.debug("Pre-scan: %s — no real content, skipping cache", domain)
 
-        # Always enqueue links regardless of classification — adult sites link
-        # to sister sites that also need blocking; safe sites link to sites the
-        # user might visit next.
         if depth > 0 and html:
             self._enqueue_links(html, domain, depth=depth - 1)
 
-        if is_adult:
-            logger.info(
-                "LLM pre-scan blocked: %s (confidence=%.2f) — proactively blocking before user visits",
-                domain, cls.confidence,
-            )
-            self.on_adult(domain, cls.reason, None)
-        else:
-            logger.info("LLM pre-scan: %s → safe (confidence=%.2f)", domain, cls.confidence)
-
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _needs_classification(self, domain: str) -> bool:
+    def _needs_classification(self, domain: str, log: bool = True) -> bool:
         """Return True if the domain still needs an LLM classification."""
-        import time
-
         if domain in self._in_flight:
             return False
 
-        # Adult/blocked result in DB → permanently skip (already blocked)
-        cached = self.db.get_llm_cache(domain)
-        if cached and cached.get("is_adult"):
+        # Infrastructure / CDN / known-safe → never classify
+        if _is_cdn_hostname(domain):
+            if log:
+                _log_scan(domain, "skipped", "cdn", 0, "infrastructure/CDN domain")
             return False
 
-        # Recently classified as safe → skip until TTL expires
+        # Recently classified as safe (in-memory) → skip until TTL expires
         if domain in self._safe_cache:
+            if log:
+                _log_scan(domain, "skipped", "cached-safe", 0, "recently classified safe (memory)")
             return False
 
+        # Already in DB cache (adult or safe) → skip
+        cached = self.db.get_llm_cache(domain)
+        if cached:
+            if log:
+                is_adult = cached.get("is_adult", False) if isinstance(cached, dict) else bool(cached)
+                _log_scan(domain, "skipped", "cached-db", 0, f"in DB cache (adult={is_adult})")
+            return False
+
+        # Already blocked by a user rule
         from blocky.models.block_rule import BlockType
         blocked = {
             r.domain
@@ -624,13 +1054,16 @@ class DomainScanner(threading.Thread):
         }
         if domain in blocked:
             self.db.set_llm_cache(domain, True, 1.0, "already-blocked")
+            if log:
+                _log_scan(domain, "skipped", "already-blocked", 1.0, "user rule already blocks this")
             return False
 
+        # In ANY category domain list (active or not) — skip to avoid wasting tokens
         from blocky.data.categories import CATEGORIES
-        for cat in (self.db.get_active_categories() or []):
-            cat_data = CATEGORIES.get(cat["category_id"], {})
+        for cat_data in CATEGORIES.values():
             if domain in cat_data.get("domains", []):
-                self.db.set_llm_cache(domain, True, 1.0, "in-category-list")
+                if log:
+                    _log_scan(domain, "skipped", "category", 0, "in category domain list")
                 return False
 
         return True

@@ -1,7 +1,9 @@
+import threading
+
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from blocky.models.block_rule import BlockRule, BlockStatus, BlockType
 from blocky.utils.domain_utils import is_valid_domain, normalize_domain
@@ -17,10 +19,10 @@ class WebsitesPage(Gtk.Box):
     def _build_ui(self) -> None:
         # Toolbar with search
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        toolbar.set_margin_top(16)
-        toolbar.set_margin_bottom(8)
-        toolbar.set_margin_start(24)
-        toolbar.set_margin_end(24)
+        toolbar.set_margin_top(12)
+        toolbar.set_margin_bottom(6)
+        toolbar.set_margin_start(16)
+        toolbar.set_margin_end(16)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text("Filter websites...")
@@ -42,9 +44,9 @@ class WebsitesPage(Gtk.Box):
 
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.list_box.set_margin_start(24)
-        self.list_box.set_margin_end(24)
-        self.list_box.set_margin_bottom(24)
+        self.list_box.set_margin_start(16)
+        self.list_box.set_margin_end(16)
+        self.list_box.set_margin_bottom(16)
         self.list_box.set_filter_func(self._filter_func)
 
         scroll.set_child(self.list_box)
@@ -96,26 +98,24 @@ class WebsitesPage(Gtk.Box):
         row = Gtk.ListBoxRow()
         row.rule = rule
         row.set_selectable(False)
-        row.set_margin_bottom(6)
+        row.set_margin_bottom(4)
 
-        card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         card.add_css_class("blocky-card")
         if rule.status == BlockStatus.ACTIVE:
             card.add_css_class("active")
         else:
             card.add_css_class("paused")
-        card.set_margin_top(2)
-        card.set_margin_bottom(2)
 
         # Status dot
         dot = Gtk.Box()
-        dot.set_size_request(10, 10)
+        dot.set_size_request(8, 8)
         dot.add_css_class("status-dot")
         dot.add_css_class("blocked" if rule.status == BlockStatus.ACTIVE else "paused")
         card.append(dot)
 
         # Domain info
-        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         info.set_hexpand(True)
 
         name_lbl = Gtk.Label(label=rule.name, xalign=0)
@@ -143,12 +143,6 @@ class WebsitesPage(Gtk.Box):
             sched_badge.add_css_class("scheduled")
             card.append(sched_badge)
 
-        # Type badge
-        type_badge = Gtk.Label(label="WEB")
-        type_badge.add_css_class("badge")
-        type_badge.add_css_class("website")
-        card.append(type_badge)
-
         # Toggle switch
         toggle = Gtk.Switch()
         toggle.set_active(rule.status == BlockStatus.ACTIVE)
@@ -170,28 +164,36 @@ class WebsitesPage(Gtk.Box):
         bm = self.window.get_block_manager()
         if not bm:
             return False
-        try:
-            if state:
-                bm.activate_rule(rule)
-                self.window.show_toast(f"Blocked: {rule.domain}")
-            else:
-                bm.deactivate_rule(rule)
-                self.window.show_toast(f"Paused: {rule.domain}")
-            self.refresh()
-        except Exception as e:
-            self.window.show_toast(f"Error: {e}")
+
+        def _work():
+            try:
+                if state:
+                    bm.activate_rule(rule)
+                    GLib.idle_add(self.window.show_toast, f"Blocked: {rule.domain}")
+                else:
+                    bm.deactivate_rule(rule)
+                    GLib.idle_add(self.window.show_toast, f"Paused: {rule.domain}")
+                GLib.idle_add(self.refresh)
+            except Exception as e:
+                GLib.idle_add(self.window.show_toast, f"Error: {e}")
+                GLib.idle_add(switch.set_active, not state)
+
+        threading.Thread(target=_work, daemon=True).start()
         return False
 
     def _on_delete(self, _btn, rule: BlockRule) -> None:
         bm = self.window.get_block_manager()
-        if bm:
+
+        def _work():
             try:
-                bm.delete_rule(rule)
+                if bm:
+                    bm.delete_rule(rule)
+                GLib.idle_add(self.window.show_toast, f"Removed: {rule.domain}")
+                GLib.idle_add(self.refresh)
             except Exception as e:
-                self.window.show_toast(f"Error: {e}")
-                return
-        self.window.show_toast(f"Removed: {rule.domain}")
-        self.refresh()
+                GLib.idle_add(self.window.show_toast, f"Error: {e}")
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def _show_add_dialog(self, *_) -> None:
         dialog = AddWebsiteDialog(self.window)
@@ -229,16 +231,16 @@ class WebsitesPage(Gtk.Box):
         rule_id = db.add_rule(rule)
         rule.id = rule_id
 
-        if bm:
+        def _work():
             try:
-                bm.activate_rule(rule)
+                if bm:
+                    bm.activate_rule(rule)
+                GLib.idle_add(self.window.show_toast, f"Blocked: {domain}")
             except Exception as e:
-                self.window.show_toast(f"Saved, but blocking failed: {e}")
-                self.refresh()
-                return
+                GLib.idle_add(self.window.show_toast, f"Saved, but blocking failed: {e}")
+            GLib.idle_add(self.refresh)
 
-        self.window.show_toast(f"Blocked: {domain}")
-        self.refresh()
+        threading.Thread(target=_work, daemon=True).start()
 
 
 class AddWebsiteDialog(Adw.MessageDialog):

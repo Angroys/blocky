@@ -355,24 +355,30 @@ class BlockManager:
         threshold = float(self.db.get_setting("llm_confidence_threshold", "0.85") or "0.85")
         prescan_limit = int(self.db.get_setting("llm_prescan_limit", "5") or "5")
 
-        if not api_key:
-            logger.warning("LLM detection: no API key configured")
+        # Image scanner settings
+        image_enabled = self.db.get_setting("nsfw_image_scan_enabled", "0") == "1"
+        image_threshold = float(self.db.get_setting("nsfw_image_threshold", "0.75") or "0.75")
+        image_max = int(self.db.get_setting("nsfw_image_max_per_page", "5") or "5")
+
+        # Build LLM agent if API key is available
+        agent = None
+        if api_key:
+            from blocky.llm.providers import get_provider
+            from blocky.llm.models import make_agent
+
+            provider = get_provider(provider_name)
+            if provider:
+                try:
+                    agent = make_agent(provider_name, provider.model_id, api_key, provider.base_url)
+                except Exception as e:
+                    logger.error("LLM detection: failed to create agent: %s", e)
+
+        # Need at least one detection method
+        if not agent and not image_enabled:
+            logger.warning("LLM detection: no API key and image scanner disabled — nothing to do")
             return
 
-        from blocky.llm.providers import get_provider
-        from blocky.llm.models import make_agent
         from blocky.llm.scanner import DomainScanner
-
-        provider = get_provider(provider_name)
-        if not provider:
-            logger.warning("LLM detection: unknown provider %s", provider_name)
-            return
-
-        try:
-            agent = make_agent(provider_name, provider.model_id, api_key, provider.base_url)
-        except Exception as e:
-            logger.error("LLM detection: failed to create agent: %s", e)
-            return
 
         self._llm_scanner = DomainScanner(
             db=self.db,
@@ -381,9 +387,15 @@ class BlockManager:
             confidence_threshold=threshold,
             on_adult=self._auto_block_domain,
             prescan_limit=prescan_limit,
+            image_scanner_enabled=image_enabled,
+            image_confidence_threshold=image_threshold,
+            image_max_per_page=image_max,
         )
         self._llm_scanner.start()
-        logger.info("LLM detection enabled (provider=%s, threshold=%.2f)", provider_name, threshold)
+        logger.info(
+            "LLM detection enabled (provider=%s, threshold=%.2f, image=%s)",
+            provider_name, threshold, image_enabled,
+        )
 
     def disable_llm_detection(self) -> None:
         """Stop the LLM background scanner."""

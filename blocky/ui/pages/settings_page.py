@@ -76,12 +76,12 @@ class SettingsPage(Gtk.Box):
 
         theme_row = Adw.ActionRow()
         theme_row.set_title("Theme")
-        theme_row.set_subtitle("Switch between the dark neon theme and a glossy liquid glass look")
-        theme_strings = Gtk.StringList.new(["Dark Neon", "Liquid Glass"])
+        theme_row.set_subtitle("Switch between Neo-Tactile dark and Soft Neumorphic light themes")
+        theme_strings = Gtk.StringList.new(["Neo-Tactile Dark", "Soft Neumorphic"])
         theme_combo = Gtk.DropDown(model=theme_strings)
         theme_combo.set_valign(Gtk.Align.CENTER)
         current_theme = (db.get_setting("ui_theme", "dark") or "dark") if db else "dark"
-        theme_combo.set_selected(1 if current_theme == "glass" else 0)
+        theme_combo.set_selected(1 if current_theme == "light" else 0)
         theme_combo.connect("notify::selected", self._on_theme_changed)
         theme_row.add_suffix(theme_combo)
         self._theme_combo = theme_combo
@@ -167,6 +167,60 @@ class SettingsPage(Gtk.Box):
         llm_group.add(test_row)
 
         prefs.add(llm_group)
+
+        # ── Local Image Detection group ───────────────────
+        img_group = Adw.PreferencesGroup()
+        img_group.set_title("Local Image Detection")
+        img_group.set_description(
+            "NSFW image classifier using a local ONNX model (~10 MB). "
+            "No API key required — runs entirely on CPU."
+        )
+
+        img_enable_row = Adw.ActionRow()
+        img_enable_row.set_title("Enable image scanning")
+        img_enable_row.set_subtitle("Download and classify images from visited pages")
+        img_enable_switch = Gtk.Switch()
+        img_enable_switch.set_valign(Gtk.Align.CENTER)
+        if db:
+            img_enable_switch.set_active(db.get_setting("nsfw_image_scan_enabled", "0") == "1")
+        img_enable_switch.connect("state-set", self._on_image_scan_toggle)
+        img_enable_row.add_suffix(img_enable_switch)
+        img_group.add(img_enable_row)
+
+        img_thresh_adj = Gtk.Adjustment.new(0.75, 0.50, 1.00, 0.05, 0.10, 0)
+        img_thresh_row = Adw.SpinRow.new(img_thresh_adj, 0.05, 2)
+        img_thresh_row.set_title("Image Confidence Threshold")
+        img_thresh_row.set_subtitle("Minimum NSFW score to trigger blocking (0.50–1.00)")
+        img_thresh_val = float((db.get_setting("nsfw_image_threshold", "0.75") or "0.75")) if db else 0.75
+        img_thresh_row.set_value(img_thresh_val)
+        img_thresh_row.connect("notify::value", self._on_image_threshold_changed)
+        img_group.add(img_thresh_row)
+
+        img_max_adj = Gtk.Adjustment.new(5, 1, 20, 1, 5, 0)
+        img_max_row = Adw.SpinRow.new(img_max_adj, 1, 0)
+        img_max_row.set_title("Max images per page")
+        img_max_row.set_subtitle("Number of images to download and classify per page")
+        img_max_val = int((db.get_setting("nsfw_image_max_per_page", "5") or "5")) if db else 5
+        img_max_row.set_value(img_max_val)
+        img_max_row.connect("notify::value", self._on_image_max_changed)
+        img_group.add(img_max_row)
+
+        img_model_row = Adw.ActionRow()
+        img_model_row.set_title("NSFW model")
+        img_model_row.set_subtitle("MobileNet v2 — downloaded on first use to ~/.local/share/blocky/models/")
+        from blocky.llm.image_scanner import MODEL_PATH
+        if MODEL_PATH.exists():
+            size_mb = MODEL_PATH.stat().st_size // (1024 * 1024)
+            model_status = Gtk.Label(label=f"Ready ({size_mb} MB)")
+            model_status.add_css_class("success")
+        else:
+            model_status = Gtk.Label(label="Not downloaded")
+            model_status.add_css_class("muted")
+        model_status.set_valign(Gtk.Align.CENTER)
+        img_model_row.add_suffix(model_status)
+        img_group.add(img_model_row)
+
+        prefs.add(img_group)
 
         # ── About group ──────────────────────────────────
         about_group = Adw.PreferencesGroup()
@@ -274,7 +328,7 @@ class SettingsPage(Gtk.Box):
         return False
 
     def _on_theme_changed(self, combo, _param) -> None:
-        theme = "glass" if combo.get_selected() == 1 else "dark"
+        theme = "light" if combo.get_selected() == 1 else "dark"
         app = self.window.get_application()
         if app and hasattr(app, "apply_theme"):
             app.apply_theme(theme)
@@ -365,6 +419,25 @@ class SettingsPage(Gtk.Box):
             db.set_setting("llm_prescan_limit", "0" if state else "5")
         self._restart_scanner()
         return False
+
+    def _on_image_scan_toggle(self, switch, state) -> bool:
+        db = self.window.get_db()
+        if db:
+            db.set_setting("nsfw_image_scan_enabled", "1" if state else "0")
+        self._restart_scanner()
+        return False
+
+    def _on_image_threshold_changed(self, spin_row, _param) -> None:
+        db = self.window.get_db()
+        if db:
+            db.set_setting("nsfw_image_threshold", f"{spin_row.get_value():.2f}")
+        self._restart_scanner()
+
+    def _on_image_max_changed(self, spin_row, _param) -> None:
+        db = self.window.get_db()
+        if db:
+            db.set_setting("nsfw_image_max_per_page", str(int(spin_row.get_value())))
+        self._restart_scanner()
 
     def _restart_scanner(self) -> None:
         bm = self.window.get_block_manager()

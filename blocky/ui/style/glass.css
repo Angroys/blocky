@@ -1,106 +1,88 @@
 /*
- * Blocky — Liquid Glass Theme
+ * Blocky — Soft-Organic Neumorphic Light Theme
  *
  * Design principles:
- *   • Window: vivid wallpaper-style gradient (the "world behind the glass")
- *   • Surfaces: very low-opacity white — you see the gradient through them
- *   • 3-D depth: three stacked box-shadows per surface:
- *       1. inset top bright rim   → specular highlight (light hits top edge)
- *       2. inset bottom dark rim  → ground shadow (thickness illusion)
- *       3. outer coloured glow    → element floats above background
- *   • Buttons: prismatic gradient (white→tint→colour) + same 3-D treatment
- *   • Typography: dark on glass (readable through translucency)
+ *   - Warm sage and lavender palette with organic tones
+ *   - Neumorphic surfaces: convex (raised) cards, concave (inset) inputs
+ *   - Dual-shadow illusion: light top-left highlight + dark bottom-right depth
+ *   - Frosted glass accents with lavender tint on overlays
+ *   - Soft, rounded geometry (24px card radius, 12px input radius)
  */
 
 /* ── 1. LIBADWAITA NAMED-COLOR OVERRIDES ─────────────────────────────────
-   These tokens are consumed by all Adw.* widgets at FORCE_LIGHT.
-   Keep them translucent/near-white so Adw rows don't hide the window bg.
+   Tokens consumed by all Adw.* widgets at FORCE_LIGHT.
    ──────────────────────────────────────────────────────────────────────── */
 
-@define-color window_bg_color          rgba(210, 230, 255, 0.0);
-@define-color window_fg_color          #1a2540;
+@define-color window_bg_color          #D9DBD6;
+@define-color window_fg_color          #4A5D54;
 
-@define-color card_bg_color            rgba(255, 255, 255, 0.28);
-@define-color card_fg_color            #1a2540;
+@define-color card_bg_color            #D9DBD6;
+@define-color card_fg_color            #4A5D54;
 
-@define-color headerbar_bg_color       rgba(255, 255, 255, 0.30);
-@define-color headerbar_fg_color       #1a2540;
-@define-color headerbar_border_color   rgba(255, 255, 255, 0.55);
-@define-color headerbar_backdrop_color rgba(255, 255, 255, 0.20);
-@define-color headerbar_shade_color    rgba(0,   0,   0,   0.04);
+@define-color headerbar_bg_color       #D9DBD6;
+@define-color headerbar_fg_color       #4A5D54;
+@define-color headerbar_border_color   rgba(255, 255, 255, 0.30);
+@define-color headerbar_backdrop_color #D1D3CE;
+@define-color headerbar_shade_color    rgba(0, 0, 0, 0.04);
 
-@define-color sidebar_bg_color         rgba(255, 255, 255, 0.22);
-@define-color sidebar_fg_color         #1a2540;
-@define-color sidebar_backdrop_color   rgba(255, 255, 255, 0.15);
-@define-color sidebar_border_color     rgba(255, 255, 255, 0.45);
-@define-color sidebar_shade_color      rgba(0,   0,   0,   0.04);
+@define-color sidebar_bg_color         #D9DBD6;
+@define-color sidebar_fg_color         #4A5D54;
+@define-color sidebar_backdrop_color   #D1D3CE;
+@define-color sidebar_border_color     rgba(255, 255, 255, 0.30);
+@define-color sidebar_shade_color      rgba(0, 0, 0, 0.04);
 
-@define-color view_bg_color            rgba(255, 255, 255, 0.15);
-@define-color view_fg_color            #1a2540;
+@define-color view_bg_color            #D9DBD6;
+@define-color view_fg_color            #4A5D54;
 
-@define-color popover_bg_color         rgba(240, 248, 255, 0.92);
-@define-color popover_fg_color         #1a2540;
+@define-color popover_bg_color         #E0E2DD;
+@define-color popover_fg_color         #4A5D54;
 
-@define-color dialog_bg_color          rgba(235, 245, 255, 0.94);
-@define-color dialog_fg_color          #1a2540;
+@define-color dialog_bg_color          #E0E2DD;
+@define-color dialog_fg_color          #4A5D54;
 
-@define-color accent_color             #1565c0;
-@define-color accent_bg_color          #1e88e5;
-@define-color accent_fg_color          #ffffff;
+@define-color accent_color             #6C8C7E;
+@define-color accent_bg_color          #8EA69A;
+@define-color accent_fg_color          #FFFFFF;
 
-@define-color destructive_color        #c62828;
-@define-color destructive_bg_color     #ef5350;
-@define-color destructive_fg_color     #ffffff;
+@define-color destructive_color        #B25555;
+@define-color destructive_bg_color     #C47070;
+@define-color destructive_fg_color     #FFFFFF;
 
-@define-color success_color            #00897b;
-@define-color success_bg_color         #26a69a;
-@define-color success_fg_color         #ffffff;
+@define-color success_color            #6C8C7E;
+@define-color success_bg_color         #8EA69A;
+@define-color success_fg_color         #FFFFFF;
 
-@define-color warning_color            #e65100;
-@define-color warning_bg_color         #ff7043;
-@define-color warning_fg_color         #ffffff;
+@define-color warning_color            #A08050;
+@define-color warning_bg_color         #C0A070;
+@define-color warning_fg_color         #FFFFFF;
 
 /* ── 2. LOCAL PALETTE ────────────────────────────────────────────────────
    Internal convenience colours — not Adwaita tokens.
    ──────────────────────────────────────────────────────────────────────── */
 
-/* Specular rim colours */
-@define-color _rim_top    rgba(255, 255, 255, 0.88);
-@define-color _rim_bottom rgba(180, 200, 240, 0.25);
+@define-color _bg_main       #D9DBD6;
+@define-color _surface_light #B2C2B9;
+@define-color _surface_med   #8EA69A;
+@define-color _surface_dark  #6C8C7E;
+@define-color _lav_soft      #E0E0F8;
+@define-color _lav_glow      #D1D1F0;
+@define-color _mint_active   #A8BDB1;
+@define-color _text_heading  #4A5D54;
+@define-color _text_sub      #6C8C7E;
+@define-color _text_accent   #5A5A7A;
+@define-color _text_muted    #8A9A92;
+@define-color _text_input    #9BA39E;
 
-/* Surface fill */
-@define-color _surf_fill  rgba(255, 255, 255, 0.22);
-@define-color _surf_hover rgba(255, 255, 255, 0.36);
-
-/* Outer glow / shadow */
-@define-color _glow_blue  rgba(30, 100, 220, 0.22);
-@define-color _glow_red   rgba(220, 50,  80, 0.18);
-@define-color _glow_green rgba(20, 160, 140, 0.18);
-
-/* Accent tints for prismatic buttons */
-@define-color _teal       #00bcd4;
-@define-color _purple     #7e57c2;
-@define-color _orange     #ff7043;
-@define-color _text_dim   #3d5470;
-@define-color _text_muted #6b84a8;
-
-/* ── 3. WINDOW — THE "WORLD BEHIND THE GLASS" ────────────────────────────
-   Rich, saturated wallpaper. Everything rendered on top is glass.
+/* ── 3. WINDOW ───────────────────────────────────────────────────────────
+   Solid neumorphic canvas — no gradient, just the warm grey-sage base.
    ──────────────────────────────────────────────────────────────────────── */
 
 window {
-    background:
-        linear-gradient(135deg,
-            #a8c8f8  0%,
-            #c5b5f5 28%,
-            #9dd8f0 52%,
-            #b8f0e0 74%,
-            #fce4b0 100%
-        );
-    color: @window_fg_color;
+    background-color: @_bg_main;
+    color: @_text_heading;
 }
 
-/* Make all libadwaita internal containers transparent so the window gradient shows through */
+/* Make libadwaita containers transparent so window bg shows */
 .background,
 toolbarview,
 toolbarview > .top-bar,
@@ -114,429 +96,397 @@ scrolledwindow > viewport {
     background-color: transparent;
 }
 
-/* ── 4. GLASS SURFACE MACRO ──────────────────────────────────────────────
-   Reused across header, sidebar, cards, dialogs, rows.
-   ──────────────────────────────────────────────────────────────────────── */
-
-/* Applied directly wherever needed via compound selectors below. */
-
-/* ── 5. HEADER BAR ───────────────────────────────────────────────────────  */
+/* ── 4. HEADER BAR ───────────────────────────────────────────────────────  */
 
 headerbar {
-    background: rgba(255, 255, 255, 0.28);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+    background-color: @_bg_main;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.30);
     box-shadow:
-        /* specular top rim */
-        inset  0  1px  0 rgba(255, 255, 255, 0.90),
-        /* bottom rim — thickness */
-        inset  0 -1px  0 rgba(180, 200, 240, 0.30),
-        /* outer drop shadow */
-        0 4px 24px rgba(30, 80, 180, 0.18);
+        0 2px 6px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.50);
 }
 
 headerbar .title {
-    color: @accent_bg_color;
+    color: @_surface_dark;
     font-weight: 700;
     font-size: 14px;
     letter-spacing: 2px;
-    text-shadow: 0 1px 6px rgba(255,255,255,0.70);
 }
 
-/* ── 6. SIDEBAR ──────────────────────────────────────────────────────────  */
+/* ── 5. SIDEBAR ──────────────────────────────────────────────────────────  */
 
 .nav-sidebar {
-    background: rgba(255, 255, 255, 0.20);
-    border-right: 1px solid rgba(255, 255, 255, 0.48);
+    background-color: rgba(178, 194, 185, 0.25);
+    border-right: 1px solid rgba(255, 255, 255, 0.30);
     min-width: 160px;
-    box-shadow:
-        inset -1px 0 0 rgba(255, 255, 255, 0.50),
-        1px 0 16px rgba(30, 80, 180, 0.10);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.40);
 }
 
 .nav-sidebar row {
     padding: 4px 8px;
-    border-radius: 14px;
+    border-radius: 16px;
     margin: 2px 8px;
     transition: background-color 150ms ease;
 }
 
 .nav-sidebar row:hover {
-    background: rgba(255, 255, 255, 0.38);
+    background-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 3px 3px 6px #BEBEBE, -3px -3px 6px #FFFFFF;
 }
 
 .nav-sidebar row:selected {
-    background: rgba(255, 255, 255, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    box-shadow:
-        inset 0  1px 0 rgba(255, 255, 255, 0.90),
-        inset 0 -1px 0 rgba(30, 80, 200, 0.12),
-        0 4px 12px rgba(30, 100, 220, 0.18);
+    background-color: @_lav_soft;
+    border: 1px solid rgba(255, 255, 255, 0.50);
+    box-shadow: 6px 6px 12px #BEBEBE, -6px -6px 12px #FFFFFF;
 }
 
 .nav-sidebar row:selected label {
-    color: @accent_bg_color;
+    color: @_text_accent;
     font-weight: 600;
 }
 
-/* ── 7. BLOCKY CARDS ─────────────────────────────────────────────────────  */
+/* ── 6. BLOCKY CARDS — Neumorphic convex (raised) ────────────────────────  */
 
 .blocky-card {
-    background: rgba(255, 255, 255, 0.25);
-    border-radius: 22px;
+    background-color: @_bg_main;
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    border-radius: 24px;
     padding: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.62);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.88),  /* top specular rim */
-        inset  0 -1px  0 rgba(160, 190, 240, 0.28),  /* bottom thickness */
-        0 8px 32px rgba(30, 80, 180, 0.18),           /* outer glow */
-        0 2px  8px rgba(0,   0,   0,  0.08);
-    transition: box-shadow 200ms ease, background 200ms ease;
+    box-shadow: 8px 8px 16px #BEBEBE, -8px -8px 16px #FFFFFF;
+    transition: box-shadow 200ms ease;
 }
 
 .blocky-card:hover {
-    background: rgba(255, 255, 255, 0.36);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.95),
-        inset  0 -1px  0 rgba(160, 190, 240, 0.35),
-        0 14px 42px rgba(30, 80, 200, 0.26),
-        0  3px 12px rgba(0,   0,   0,  0.10);
+    box-shadow: 10px 10px 20px #BEBEBE, -10px -10px 20px #FFFFFF;
 }
 
 .blocky-card.active {
-    border-color: rgba(255, 255, 255, 0.55);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.90),
-        inset  0 -1px  0 rgba(220, 80, 100, 0.22),
-        0 8px 32px @_glow_red,
-        0 2px  8px rgba(0, 0, 0, 0.08);
+    border-color: rgba(178, 100, 100, 0.30);
+    box-shadow: 8px 8px 16px #BEBEBE, -8px -8px 16px #FFFFFF,
+                0 0 0 2px rgba(196, 112, 112, 0.20);
 }
 
-.blocky-card.paused { opacity: 0.72; }
+.blocky-card.paused {
+    opacity: 0.65;
+    box-shadow: 4px 4px 8px #BEBEBE, -4px -4px 8px #FFFFFF;
+}
 
-/* ── 8. ADW PREFERENCE ROWS — GLASS SURFACE OVERRIDE ────────────────────  */
+/* ── 7. ADW PREFERENCE ROWS — Neumorphic surface ─────────────────────────  */
 
-/* Adw.PreferencesGroup list box gets the glass surface treatment */
 .preferences-group > box > list,
 .preferences-group > list {
-    background: rgba(255, 255, 255, 0.22);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.58);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.85),
-        inset  0 -1px  0 rgba(160, 190, 240, 0.22),
-        0 6px 24px rgba(30, 80, 180, 0.14);
+    background-color: @_bg_main;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 6px 6px 12px #BEBEBE, -6px -6px 12px #FFFFFF;
 }
 
 row.activatable:hover {
-    background: rgba(255, 255, 255, 0.30);
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
-/* ── 9. STATUS DOTS ──────────────────────────────────────────────────────  */
+/* ── 8. STATUS DOTS ──────────────────────────────────────────────────────  */
 
 @keyframes pulse-green {
-    0%   { box-shadow: 0 0 0 0   rgba(20, 160, 140, 0.80); }
-    70%  { box-shadow: 0 0 0 8px rgba(20, 160, 140, 0);    }
-    100% { box-shadow: 0 0 0 0   rgba(20, 160, 140, 0);    }
+    0%   { box-shadow: 0 0 0 0   rgba(142, 166, 154, 0.80); }
+    70%  { box-shadow: 0 0 0 8px rgba(142, 166, 154, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(142, 166, 154, 0); }
 }
+
 @keyframes pulse-red {
-    0%   { box-shadow: 0 0 0 0   rgba(220, 50, 80, 0.80); }
-    70%  { box-shadow: 0 0 0 8px rgba(220, 50, 80, 0);    }
-    100% { box-shadow: 0 0 0 0   rgba(220, 50, 80, 0);    }
+    0%   { box-shadow: 0 0 0 0   rgba(196, 112, 112, 0.80); }
+    70%  { box-shadow: 0 0 0 8px rgba(196, 112, 112, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(196, 112, 112, 0); }
 }
 
 .status-dot {
-    min-width: 10px; min-height: 10px;
+    min-width: 10px;
+    min-height: 10px;
     border-radius: 50%;
-    background: @_text_muted;
+    background-color: @_text_muted;
 }
-.status-dot.active  { background: @success_bg_color;     animation: pulse-green 2s infinite; }
-.status-dot.blocked { background: @destructive_bg_color; animation: pulse-red   2s infinite; }
-.status-dot.paused  { background: @_orange; }
 
-/* ── 10. BUTTONS — PRISMATIC GLASS ───────────────────────────────────────  */
+.status-dot.active {
+    background-color: @_surface_med;
+    animation: pulse-green 2s infinite;
+}
 
-button { border-radius: 14px; transition: all 150ms ease; }
+.status-dot.blocked {
+    background-color: @destructive_bg_color;
+    animation: pulse-red 2s infinite;
+}
+
+.status-dot.paused {
+    background-color: @warning_bg_color;
+}
+
+/* ── 9. BUTTONS — Neumorphic convex ──────────────────────────────────────  */
+
+button {
+    border-radius: 16px;
+    transition: all 150ms ease;
+}
 
 button.suggested-action {
-    /* White leading edge → tinted middle → saturated accent */
-    background:
-        linear-gradient(150deg,
-            rgba(255, 255, 255, 0.55)  0%,
-            rgba(30,  136, 229, 0.72) 45%,
-            rgba(0,   188, 212, 0.85) 100%
-        );
-    color: #fff;
+    background-color: @_surface_med;
+    color: #FFFFFF;
     font-weight: 700;
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    text-shadow: 0 1px 4px rgba(0, 60, 130, 0.35);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.72),   /* top specular */
-        inset  0 -1px  0 rgba(0, 100, 180, 0.25),     /* bottom depth */
-        0 6px 20px rgba(30, 136, 229, 0.38),
-        0 2px  6px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 6px 6px 12px #BEBEBE, -6px -6px 12px #FFFFFF;
 }
+
 button.suggested-action:hover {
-    background:
-        linear-gradient(150deg,
-            rgba(255, 255, 255, 0.68)  0%,
-            rgba(30,  136, 229, 0.88) 45%,
-            rgba(0,   188, 212, 0.96) 100%
-        );
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.82),
-        inset  0 -1px  0 rgba(0,  100, 180, 0.30),
-        0 10px 28px rgba(30, 136, 229, 0.50),
-        0  3px  8px rgba(0, 0, 0, 0.14);
+    background-color: @_surface_dark;
+    box-shadow: 4px 4px 8px #BEBEBE, -4px -4px 8px #FFFFFF;
 }
 
 button.destructive-action {
-    background: rgba(255, 255, 255, 0.32);
+    background-color: @_bg_main;
     color: @destructive_color;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.75),
-        inset  0 -1px 0 rgba(220, 50, 80, 0.18);
+    border: 1px solid rgba(178, 85, 85, 0.25);
+    box-shadow: 4px 4px 8px #BEBEBE, -4px -4px 8px #FFFFFF;
 }
+
 button.destructive-action:hover {
-    background: rgba(255, 255, 255, 0.42);
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.85),
-        inset  0 -1px 0 rgba(220, 50, 80, 0.25),
-        0 6px 18px @_glow_red;
+    box-shadow: 2px 2px 4px #BEBEBE, -2px -2px 4px #FFFFFF;
 }
 
 /* FAB */
 .fab {
-    background:
-        linear-gradient(145deg,
-            rgba(255, 255, 255, 0.55) 0%,
-            rgba(30,  136, 229, 0.80) 50%,
-            rgba(0,   188, 212, 0.92) 100%
-        );
-    color: #fff;
+    background-color: @_surface_med;
+    color: #FFFFFF;
     border-radius: 50%;
-    min-width: 56px; min-height: 56px;
-    font-size: 24px; font-weight: 900;
-    border: 1px solid rgba(255, 255, 255, 0.62);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.75),
-        inset  0 -1px  0 rgba(0,  100, 180, 0.28),
-        0 10px 30px rgba(30, 136, 229, 0.42),
-        0  3px  8px rgba(0, 0, 0, 0.14);
-}
-.fab:hover {
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.85),
-        inset  0 -1px  0 rgba(0,  100, 180, 0.35),
-        0 14px 38px rgba(30, 136, 229, 0.55);
+    min-width: 56px;
+    min-height: 56px;
+    font-size: 24px;
+    font-weight: 900;
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 8px 8px 16px #BEBEBE, -8px -8px 16px #FFFFFF;
 }
 
-/* ── 11. SWITCHES ────────────────────────────────────────────────────────  */
+.fab:hover {
+    box-shadow: 10px 10px 20px #BEBEBE, -10px -10px 20px #FFFFFF;
+}
+
+/* ── 10. SWITCHES ────────────────────────────────────────────────────────  */
 
 switch {
-    background: rgba(255, 255, 255, 0.30);
-    border: 1px solid rgba(255, 255, 255, 0.58);
+    background-color: @_surface_light;
+    border: 1px solid rgba(255, 255, 255, 0.30);
     border-radius: 16px;
-    box-shadow:
-        inset 0  1px 0 rgba(255, 255, 255, 0.70),
-        inset 0 -1px 0 rgba(160, 190, 240, 0.22);
-}
-switch:checked {
-    background:
-        linear-gradient(135deg,
-            rgba(0,  188, 212, 0.82),
-            rgba(0,  168, 140, 0.88)
-        );
-    border-color: rgba(255, 255, 255, 0.60);
-    box-shadow:
-        inset 0  1px 0 rgba(255, 255, 255, 0.62),
-        0 4px 12px @_glow_green;
-}
-switch slider {
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22),
-                0 1px  3px rgba(0, 0, 0, 0.12);
+    box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.08),
+                inset -3px -3px 6px rgba(255, 255, 255, 0.70);
 }
 
-/* ── 12. ENTRIES ─────────────────────────────────────────────────────────  */
+switch:checked {
+    background-color: @_surface_med;
+    box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.12),
+                inset -3px -3px 6px rgba(255, 255, 255, 0.40);
+}
+
+switch slider {
+    background-color: #FFFFFF;
+    border-radius: 50%;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* ── 11. ENTRIES — Neumorphic concave (inset) ────────────────────────────  */
 
 entry {
-    background: rgba(255, 255, 255, 0.30);
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    border-radius: 14px;
-    color: @window_fg_color;
-    caret-color: @accent_bg_color;
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.80),
-        inset  0 -1px 0 rgba(160, 190, 240, 0.20),
-        0 4px 14px rgba(30, 80, 180, 0.10);
+    background: linear-gradient(145deg, #D0D2CD, #E2E4DF);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    border-radius: 12px;
+    color: @_text_heading;
+    caret-color: @_surface_dark;
+    box-shadow: inset 4px 4px 8px #BEBEBE, inset -4px -4px 8px #FFFFFF;
     transition: border-color 150ms ease, box-shadow 150ms ease;
 }
+
 entry:focus {
-    border-color: rgba(255, 255, 255, 0.80);
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.90),
-        inset  0 -1px 0 rgba(30, 136, 229, 0.22),
-        0 0 0 3px rgba(30, 136, 229, 0.20),
-        0 4px 14px rgba(30, 80, 180, 0.14);
+    border-color: @_lav_glow;
+    box-shadow: inset 4px 4px 8px #BEBEBE, inset -4px -4px 8px #FFFFFF,
+                0 0 0 2px rgba(209, 209, 240, 0.40);
 }
 
-/* ── 13. LIST BOXES ──────────────────────────────────────────────────────  */
+/* ── 12. LIST BOXES ──────────────────────────────────────────────────────  */
 
-listbox { background: transparent; }
+listbox { background-color: transparent; }
+
 listbox row {
-    background: transparent;
-    border-radius: 12px;
-    transition: background 100ms ease;
+    background-color: transparent;
+    border-radius: 14px;
+    transition: background-color 100ms ease;
 }
-listbox row:hover    { background: rgba(255, 255, 255, 0.32); }
-listbox row:selected { background: rgba(30, 136, 229, 0.14); }
 
-/* ── 14. STAT CARDS ──────────────────────────────────────────────────────  */
+listbox row:hover {
+    background-color: rgba(255, 255, 255, 0.35);
+}
+
+listbox row:selected {
+    background-color: rgba(224, 224, 248, 0.40);
+}
+
+/* ── 13. STAT CARDS — Neumorphic convex ──────────────────────────────────  */
 
 .stat-card {
-    background: rgba(255, 255, 255, 0.25);
+    background-color: @_bg_main;
     border-radius: 24px;
     padding: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.62);
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.88),
-        inset  0 -1px  0 rgba(160, 190, 240, 0.25),
-        0 10px 36px rgba(30, 80, 180, 0.20),
-        0  2px  8px rgba(0,  0,  0,  0.08);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 10px 10px 20px #BEBEBE, -10px -10px 20px #FFFFFF;
 }
-.stat-number       { color: @accent_bg_color; font-size: 48px; font-weight: 900; letter-spacing: -2px; text-shadow: 0 2px 12px rgba(30,136,229,0.35); }
-.stat-number.danger{ color: @destructive_bg_color; text-shadow: 0 2px 12px rgba(220,50,80,0.35); }
-.stat-label        { color: @_text_dim; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
 
-/* ── 15. LABELS ──────────────────────────────────────────────────────────  */
+.stat-number {
+    color: @_surface_dark;
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -2px;
+}
 
-.heading        { color: @window_fg_color; font-weight: 700; font-size: 18px; }
-.subheading     { color: @_text_dim; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-.domain-label   { color: @accent_bg_color; font-family: monospace; font-size: 13px; }
-.app-name-label { color: @window_fg_color; font-weight: 600; }
+.stat-number.danger {
+    color: @destructive_color;
+}
+
+.stat-label {
+    color: @_text_sub;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+/* ── 14. LABELS ──────────────────────────────────────────────────────────  */
+
+.heading        { color: @_text_heading; font-weight: 700; font-size: 18px; }
+.subheading     { color: @_text_sub; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.domain-label   { color: @_text_accent; font-family: monospace; font-size: 13px; }
+.app-name-label { color: @_text_heading; font-weight: 600; }
 .muted          { color: @_text_muted; font-size: 12px; }
 
-/* ── 16. BADGES ──────────────────────────────────────────────────────────  */
+/* ── 15. BADGES ──────────────────────────────────────────────────────────  */
 
 .badge {
-    border-radius: 20px; padding: 2px 10px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
-    background: rgba(255, 255, 255, 0.38);
-    border: 1px solid rgba(255, 255, 255, 0.65);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.70);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    background-color: rgba(255, 255, 255, 0.50);
+    box-shadow: 2px 2px 4px #BEBEBE, -2px -2px 4px #FFFFFF;
 }
-.badge.website  { color: @accent_bg_color; }
-.badge.app      { color: @_purple; }
-.badge.scheduled{ color: @_orange; }
 
-/* ── 17. PERMISSION BANNER ───────────────────────────────────────────────  */
+.badge.website  { color: @_surface_dark; border: 1px solid rgba(142, 166, 154, 0.30); }
+.badge.app      { color: @_text_accent;  border: 1px solid rgba(209, 209, 240, 0.40); }
+.badge.scheduled{ color: @warning_color;  border: 1px solid rgba(192, 160, 112, 0.30); }
+
+/* ── 16. PERMISSION BANNER ───────────────────────────────────────────────  */
 
 .permission-banner {
-    background: rgba(255, 200, 150, 0.28);
-    border: 1px solid rgba(255, 255, 255, 0.58);
-    border-radius: 16px; padding: 12px 16px;
+    background-color: rgba(192, 160, 112, 0.15);
+    border: 1px solid rgba(192, 160, 112, 0.30);
+    border-radius: 16px;
+    padding: 12px 16px;
     color: @warning_color;
-    box-shadow:
-        inset 0  1px 0 rgba(255, 255, 255, 0.70),
-        0 4px 14px rgba(200, 80, 20, 0.14);
+    box-shadow: 4px 4px 8px #BEBEBE, -4px -4px 8px #FFFFFF;
 }
 
-/* ── 18. SCROLLBARS ──────────────────────────────────────────────────────  */
+/* ── 17. SCROLLBARS ──────────────────────────────────────────────────────  */
 
-scrollbar { background: transparent; }
-/* Scope to scrollbar > trough > slider to avoid hitting GtkScale sliders */
+scrollbar { background-color: transparent; }
+
 scrollbar > trough > slider {
-    background: rgba(255, 255, 255, 0.42);
+    background-color: rgba(142, 166, 154, 0.30);
     border-radius: 4px;
     min-width: 6px;
     min-height: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.60);
 }
-scrollbar > trough > slider:hover { background: rgba(255, 255, 255, 0.62); }
 
-/* ── 19. DIALOGS ─────────────────────────────────────────────────────────  */
+scrollbar > trough > slider:hover {
+    background-color: rgba(142, 166, 154, 0.50);
+}
+
+/* ── 18. DIALOGS ─────────────────────────────────────────────────────────  */
 
 dialog {
-    background: rgba(235, 245, 255, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    border-radius: 26px;
-    box-shadow:
-        inset  0  1px  0 rgba(255, 255, 255, 0.92),
-        inset  0 -1px  0 rgba(160, 190, 240, 0.30),
-        0 28px 70px rgba(30,  80, 200, 0.28),
-        0  6px 20px rgba(0,   0,   0,  0.10);
+    background-color: @_bg_main;
+    border: 1px solid rgba(255, 255, 255, 0.50);
+    border-radius: 24px;
+    box-shadow: 12px 12px 24px #BEBEBE, -12px -12px 24px #FFFFFF;
 }
 
-/* ── 20. APP PICKER ──────────────────────────────────────────────────────  */
+/* ── 19. APP PICKER ──────────────────────────────────────────────────────  */
 
 .app-picker-item {
-    border-radius: 18px; padding: 12px;
+    border-radius: 16px;
+    padding: 12px;
     border: 1px solid transparent;
     transition: all 150ms ease;
 }
+
 .app-picker-item:hover {
-    background: rgba(255, 255, 255, 0.38);
-    border-color: rgba(255, 255, 255, 0.65);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.80), 0 4px 14px rgba(30,80,180,0.14);
-}
-.app-picker-item:selected {
-    background: rgba(30, 136, 229, 0.14);
-    border-color: rgba(30, 136, 229, 0.35);
+    background-color: rgba(255, 255, 255, 0.40);
+    box-shadow: 3px 3px 6px #BEBEBE, -3px -3px 6px #FFFFFF;
 }
 
-/* ── 21. DAY TOGGLES ─────────────────────────────────────────────────────  */
+.app-picker-item:selected {
+    background-color: rgba(224, 224, 248, 0.35);
+    border-color: rgba(209, 209, 240, 0.50);
+}
+
+/* ── 20. DAY TOGGLES ─────────────────────────────────────────────────────  */
 
 .day-toggle {
-    border-radius: 12px; min-width: 36px; min-height: 36px;
-    font-weight: 700; font-size: 11px; padding: 0;
-    background: rgba(255, 255, 255, 0.32);
-    border: 1px solid rgba(255, 255, 255, 0.60);
-    color: @_text_dim;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+    border-radius: 12px;
+    min-width: 36px;
+    min-height: 36px;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 0;
+    background-color: @_bg_main;
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    color: @_text_muted;
+    box-shadow: 4px 4px 8px #BEBEBE, -4px -4px 8px #FFFFFF;
 }
+
 .day-toggle:checked {
-    background: rgba(30, 136, 229, 0.20);
-    border-color: rgba(30, 136, 229, 0.42);
-    color: @accent_bg_color;
-    box-shadow:
-        inset 0  1px 0 rgba(255,255,255,0.72),
-        0 4px 10px rgba(30,136,229,0.22);
+    background-color: @_lav_soft;
+    border-color: rgba(209, 209, 240, 0.50);
+    color: @_text_accent;
+    box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.06),
+                inset -3px -3px 6px rgba(255, 255, 255, 0.70);
 }
 
-/* ── 22. SEPARATOR ───────────────────────────────────────────────────────  */
+/* ── 21. SEPARATOR ───────────────────────────────────────────────────────  */
 
-separator { background: rgba(255, 255, 255, 0.30); }
+separator { background-color: rgba(255, 255, 255, 0.30); }
 
-/* ── 23. SPINBUTTON / COMBOBOX / DROPDOWN ────────────────────────────────  */
+/* ── 22. SPINBUTTON / COMBOBOX / DROPDOWN ────────────────────────────────  */
 
 spinbutton, combobox, dropdownbutton {
-    background: rgba(255, 255, 255, 0.30);
-    border: 1px solid rgba(255, 255, 255, 0.62);
-    border-radius: 12px; color: @window_fg_color;
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.80),
-        inset  0 -1px 0 rgba(160, 190, 240, 0.20);
-}
-spinbutton:focus, combobox:focus, dropdownbutton:focus {
-    border-color: rgba(30, 136, 229, 0.50);
+    background: linear-gradient(145deg, #D0D2CD, #E2E4DF);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    border-radius: 12px;
+    color: @_text_heading;
+    box-shadow: inset 3px 3px 6px #BEBEBE, inset -3px -3px 6px #FFFFFF;
 }
 
-/* ── 24. TOAST ───────────────────────────────────────────────────────────  */
+spinbutton:focus, combobox:focus, dropdownbutton:focus {
+    border-color: @_lav_glow;
+}
+
+/* ── 23. TOAST ───────────────────────────────────────────────────────────  */
 
 .toast {
-    background: rgba(230, 244, 255, 0.90);
-    border: 1px solid rgba(255, 255, 255, 0.70);
-    border-radius: 16px; color: @window_fg_color;
-    box-shadow:
-        inset  0  1px 0 rgba(255, 255, 255, 0.88),
-        0 10px 30px rgba(30, 80, 200, 0.22);
+    background-color: @_bg_main;
+    border: 1px solid rgba(255, 255, 255, 0.50);
+    border-radius: 16px;
+    color: @_text_heading;
+    box-shadow: 8px 8px 16px #BEBEBE, -8px -8px 16px #FFFFFF;
 }
 
-/* ── 25. ACTIVITY LOG ────────────────────────────────────────────────────  */
+/* ── 24. ACTIVITY LOG ────────────────────────────────────────────────────  */
 
-.activity-row { border-bottom: 1px solid rgba(255,255,255,0.28); padding: 8px 0; }
+.activity-row { border-bottom: 1px solid rgba(255, 255, 255, 0.25); padding: 8px 0; }
 .activity-action { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
 .activity-action.activated { color: @success_color; }
 .activity-action.paused    { color: @warning_color; }

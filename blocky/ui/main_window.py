@@ -26,7 +26,7 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app) -> None:
         super().__init__(application=app, title="BLOCKY")
         self.app = app
-        self.set_default_size(1100, 700)
+        self.set_default_size(960, 620)
         self.set_size_request(360, 400)
 
         self._build_ui()
@@ -41,8 +41,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.split_view = Adw.OverlaySplitView()
         self.split_view.set_sidebar_width_fraction(0.2)
         self.split_view.set_collapsed(False)
-        self.split_view.set_min_sidebar_width(160)
-        self.split_view.set_max_sidebar_width(220)
+        self.split_view.set_min_sidebar_width(140)
+        self.split_view.set_max_sidebar_width(190)
 
         # Sidebar
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -138,10 +138,10 @@ class MainWindow(Adw.ApplicationWindow):
         row.page_id = page_id
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        box.set_margin_top(6)
-        box.set_margin_bottom(6)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
+        box.set_margin_top(4)
+        box.set_margin_bottom(4)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
 
         icon = Gtk.Image.new_from_icon_name(icon_name)
         icon.set_pixel_size(16)

@@ -14,6 +14,36 @@ whether that page constitutes adult or pornographic content that should be block
 family-safe network.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You will receive text in this structured format:
+
+  Domain: <the website domain name>
+  Title: <page title, if available>
+  Meta: <meta descriptions and OpenGraph tags, if available>
+  Content: <extracted visible body text, if available>
+
+The Domain line is ALWAYS present. Other sections may be absent if the page could
+not be fetched or rendered meaningful content (e.g. Cloudflare challenge, JavaScript-
+only SPA, or empty response).
+
+DOMAIN NAME ANALYSIS — this is CRITICAL:
+The domain name is one of the strongest classification signals. Many adult sites have
+unambiguous domain names containing words like "porn", "xxx", "sex", "adult", "nude",
+"hentai", "cam", "tube" (in adult context), "xvideos", "xhamster", "onlyfans",
+"chaturbate", "redtube", "youporn", "brazzers", etc.
+A domain name that clearly identifies an adult platform is sufficient for a high-
+confidence classification (0.90–0.98) EVEN WITHOUT page content. Conversely, a
+generic or ambiguous domain name with no page content warrants low confidence.
+
+AGE VERIFICATION SIGNALS:
+Pages showing age gates ("verify you are 18+", "adults only", "you must be of legal
+age") are STRONG positive indicators of adult content. Legitimate non-adult websites
+rarely require age verification. An age-gate page combined with a suggestive domain
+name warrants 0.85–0.95 confidence.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WHAT COUNTS AS ADULT CONTENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -203,7 +233,7 @@ class _GroqAgent:
             ],
             response_format={"type": "json_object"},
             temperature=0.0,
-            max_tokens=100,  # is_adult + confidence + short reason fits in ~60 tokens
+            max_tokens=200,
         )
         raw = completion.choices[0].message.content
         data = json.loads(raw)

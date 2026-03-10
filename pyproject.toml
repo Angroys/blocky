@@ -9,6 +9,8 @@ dependencies = [
     "SQLAlchemy>=2.0.0",
     "pydantic-ai[anthropic,groq,google,openai]>=0.0.54",
     "httpx>=0.27.0",
+    "onnxruntime>=1.17.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.scripts]
