@@ -1,5 +1,6 @@
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 import psutil
@@ -31,6 +32,7 @@ class BlockManager:
             on_kill_pid=self._handle_kill_pid,
         )
         self._llm_scanner = None
+        self._block_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="blocker")
 
     def set_status_callback(self, cb: Callable[[], None]) -> None:
         self._on_status_change = cb
@@ -461,16 +463,21 @@ class BlockManager:
             self.enable_llm_detection()
 
     def _auto_block_domain(self, domain: str, reason: str, ip: str | None = None) -> None:
-        """Called by scanner when a domain is classified as adult."""
+        """Called by scanner when a domain is classified as adult.
+
+        Fast path (synchronous): DB write + immediate IP reject.
+        Slow path (async via thread pool): hosts_add, DNS resolution,
+        iptables IP blocking, SNI keyword, browser refresh.
+        """
         from datetime import datetime as _dt
         from gi.repository import GLib
 
-        # Guard: check not already blocked (scanner may call this twice before DB commits)
+        # Guard: check not already blocked
         for rule in self.db.get_all_rules():
             if rule.domain == domain:
                 return
 
-        # Immediately REJECT the triggering IP (RST existing connection + block new)
+        # ── Fast path: immediate IP reject + DB write ─────────────────────
         if ip:
             try:
                 run_helper("iptables_add_ip", ip=ip, comment=f"blocky-{domain}")
@@ -478,30 +485,34 @@ class BlockManager:
             except HelperError as e:
                 logger.warning("iptables_add_ip failed for %s: %s", ip, e)
 
-            # Force-close the TCP socket so the browser sees an error instantly,
-            # then trigger a browser refresh so it lands on the block page.
-            threading.Thread(
-                target=self._force_browser_refresh,
-                args=(domain, ip),
-                daemon=True,
-            ).start()
-
-
         rule = BlockRule(
             name=domain,
             block_type=BlockType.WEBSITE,
             domain=domain,
-            block_ip_layer=True,   # also resolve + block any other IPs for this domain
+            block_ip_layer=True,
             status=BlockStatus.ACTIVE,
             created_at=_dt.now(),
         )
         rule_id = self.db.add_rule(rule)
         rule.id = rule_id
-        self._apply_website(rule)
         self.db.log_activity(rule_id, domain, f"LLM auto-blocked: {reason}")
 
-        # Also add the base name as an SNI keyword to block variant TLDs
-        # e.g. blocking xhamster.com also blocks xhamster.desi, xhamster.one, etc.
+        # ── Slow path: dispatch to thread pool ────────────────────────────
+        self._block_pool.submit(self._finalize_block, rule, domain, reason, ip)
+        GLib.idle_add(self._notify)
+
+    def _finalize_block(self, rule: BlockRule, domain: str, reason: str, ip: str | None) -> None:
+        """Heavy blocking work — runs in thread pool, not on scanner thread."""
+        from gi.repository import GLib
+
+        # 1. /etc/hosts + resolve all IPs + iptables
+        self._apply_website(rule)
+
+        # 2. Browser refresh (kill socket + F5)
+        if ip:
+            self._force_browser_refresh(domain, ip)
+
+        # 3. SNI keyword for variant TLD blocking
         base = domain.split(".")[0]
         if len(base) >= 4 and self.is_category_active("adult"):
             try:
@@ -511,21 +522,6 @@ class BlockManager:
                 pass
 
         GLib.idle_add(self._notify)
-
-        # Verify the block is effective by attempting a connection to the IP
-        if ip:
-            import socket as _sock
-            try:
-                _sock.create_connection((ip, 443), timeout=2).close()
-                logger.warning(
-                    "Block verification FAILED for %s (%s) — connection still succeeded",
-                    domain, ip,
-                )
-            except OSError:
-                logger.info(
-                    "Block verification OK for %s (%s) — connection refused/reset as expected",
-                    domain, ip,
-                )
 
     def _force_browser_refresh(self, domain: str, ip: str) -> None:
         """
