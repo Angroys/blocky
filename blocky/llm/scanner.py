@@ -609,7 +609,7 @@ class DomainScanner(threading.Thread):
         )
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        self._llm_sem = asyncio.Semaphore(3)
+        self._llm_sem = asyncio.Semaphore(8)
         self._prescan_queue = asyncio.Queue(maxsize=PRESCAN_QUEUE_MAX)
         try:
             loop.run_until_complete(self._scan_loop())
@@ -626,10 +626,16 @@ class DomainScanner(threading.Thread):
     # How often to clear _seen_pairs so closed+reopened connections are re-checked
     _SEEN_TTL = 30.0
 
+    # Number of parallel prescan workers draining the link queue
+    _PRESCAN_WORKERS = 4
+
     async def _scan_loop(self) -> None:
         import time
-        # Start pre-scan background worker
-        prescan_task = asyncio.ensure_future(self._prescan_worker())
+        # Start multiple pre-scan background workers for concurrent link classification
+        prescan_tasks = [
+            asyncio.ensure_future(self._prescan_worker())
+            for _ in range(self._PRESCAN_WORKERS)
+        ]
         seen_expiry = time.monotonic() + self._SEEN_TTL
         try:
             while not self._stop_event.is_set():
@@ -665,7 +671,8 @@ class DomainScanner(threading.Thread):
 
                 await asyncio.sleep(self.scan_interval)
         finally:
-            prescan_task.cancel()
+            for t in prescan_tasks:
+                t.cancel()
 
     # ── Per-connection handler (real-time, with temp block) ───────────────────
 

@@ -18,6 +18,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin
@@ -215,6 +216,9 @@ def extract_image_urls(html_content: str, domain: str, max_images: int = 5) -> l
 class NSFWClassifier:
     """ONNX-based NSFW image classifier."""
 
+    _download_lock = threading.Lock()
+    _download_failed = False  # skip retries within the same session
+
     def __init__(self) -> None:
         self._session = None
 
@@ -222,25 +226,35 @@ class NSFWClassifier:
         """Download model if not present. Returns True if model is ready."""
         if MODEL_PATH.exists():
             return True
-
-        logger.info("Downloading NSFW model to %s ...", MODEL_PATH)
-        MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        try:
-            with httpx.stream("GET", MODEL_URL, follow_redirects=True, timeout=60.0) as resp:
-                resp.raise_for_status()
-                tmp = MODEL_PATH.with_suffix(".tmp")
-                with open(tmp, "wb") as f:
-                    for chunk in resp.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
-                shutil.move(str(tmp), str(MODEL_PATH))
-            logger.info("NSFW model downloaded (%d MB)", MODEL_PATH.stat().st_size // (1024 * 1024))
-            return True
-        except Exception as e:
-            logger.error("Failed to download NSFW model: %s", e)
-            tmp = MODEL_PATH.with_suffix(".tmp")
-            if tmp.exists():
-                tmp.unlink()
+        if NSFWClassifier._download_failed:
             return False
+
+        with NSFWClassifier._download_lock:
+            # Re-check after acquiring lock (another thread may have downloaded)
+            if MODEL_PATH.exists():
+                return True
+            if NSFWClassifier._download_failed:
+                return False
+
+            logger.info("Downloading NSFW model to %s ...", MODEL_PATH)
+            MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                with httpx.stream("GET", MODEL_URL, follow_redirects=True, timeout=120.0) as resp:
+                    resp.raise_for_status()
+                    tmp = MODEL_PATH.with_suffix(".tmp")
+                    with open(tmp, "wb") as f:
+                        for chunk in resp.iter_bytes(chunk_size=8192):
+                            f.write(chunk)
+                    shutil.move(str(tmp), str(MODEL_PATH))
+                logger.info("NSFW model downloaded (%d MB)", MODEL_PATH.stat().st_size // (1024 * 1024))
+                return True
+            except Exception as e:
+                logger.error("Failed to download NSFW model: %s", e)
+                NSFWClassifier._download_failed = True
+                tmp = MODEL_PATH.with_suffix(".tmp")
+                if tmp.exists():
+                    tmp.unlink()
+                return False
 
     def _load_session(self) -> bool:
         """Load the ONNX inference session."""
