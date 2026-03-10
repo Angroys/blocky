@@ -30,17 +30,22 @@ logger = logging.getLogger(__name__)
 # ── Model config ─────────────────────────────────────────────────────────────
 
 MODEL_DIR = Path.home() / ".local" / "share" / "blocky" / "models"
-MODEL_FILE = "nsfw_mobilenet_v2.onnx"
+MODEL_FILE = "nsfw_vit_quantized.onnx"
 MODEL_PATH = MODEL_DIR / MODEL_FILE
 
-# GantMan/nsfw_model — MobileNet v2, 5 classes, ~10MB
+# Falconsai/nsfw_image_detection — ViT binary classifier (ONNX, quantized, ~87MB)
+# Hosted on HuggingFace (GitHub CDN IPs may be blocked by our own SNI rules)
 MODEL_URL = (
-    "https://raw.githubusercontent.com/nicenemo/noisy-nsfw-model/"
-    "main/mobilenet_v2_140_224/saved_model.onnx"
+    "https://huggingface.co/onnx-community/nsfw_image_detection-ONNX/"
+    "resolve/main/onnx/model_quantized.onnx"
 )
 
-# The 5 output classes in order
-CLASS_NAMES = ["drawings", "hentai", "neutral", "porn", "sexy"]
+# Binary classifier: normal (0) vs nsfw (1)
+CLASS_NAMES = ["normal", "nsfw"]
+
+# ImageNet normalization (ViT expects normalized input)
+_IMAGENET_MEAN = (0.485, 0.456, 0.406)
+_IMAGENET_STD = (0.229, 0.224, 0.225)
 
 # ── Headless browser detection ───────────────────────────────────────────────
 
@@ -276,7 +281,7 @@ class NSFWClassifier:
 
     def classify(self, image_bytes: bytes) -> Optional[dict[str, float]]:
         """
-        Classify an image. Returns dict of {class_name: score} or None on error.
+        Classify an image. Returns dict of {class_name: probability} or None on error.
         """
         if not self._load_session():
             return None
@@ -289,22 +294,32 @@ class NSFWClassifier:
             img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             img = img.resize((224, 224))
             arr = np.array(img, dtype=np.float32) / 255.0
-            # NHWC → NCHW is NOT needed for this model (it expects NHWC)
-            arr = np.expand_dims(arr, axis=0)
+
+            # ImageNet normalization
+            mean = np.array(_IMAGENET_MEAN, dtype=np.float32)
+            std = np.array(_IMAGENET_STD, dtype=np.float32)
+            arr = (arr - mean) / std
+
+            # HWC → CHW → NCHW (ViT expects channel-first)
+            arr = np.transpose(arr, (2, 0, 1))
+            arr = np.expand_dims(arr, axis=0).astype(np.float32)
 
             input_name = self._session.get_inputs()[0].name
             output_name = self._session.get_outputs()[0].name
-            result = self._session.run([output_name], {input_name: arr})
-            scores = result[0][0]
+            logits = self._session.run([output_name], {input_name: arr})[0][0]
 
-            return {name: float(scores[i]) for i, name in enumerate(CLASS_NAMES)}
+            # Softmax to get probabilities
+            exp = np.exp(logits - np.max(logits))
+            probs = exp / exp.sum()
+
+            return {name: float(probs[i]) for i, name in enumerate(CLASS_NAMES)}
         except Exception as e:
             logger.debug("Image classification error: %s", e)
             return None
 
     def is_nsfw(self, scores: dict[str, float], threshold: float = 0.75) -> bool:
-        """Return True if porn + hentai score exceeds threshold."""
-        return (scores.get("porn", 0) + scores.get("hentai", 0)) > threshold
+        """Return True if NSFW probability exceeds threshold."""
+        return scores.get("nsfw", 0) > threshold
 
 
 # ── Async page scanner ────────────────────────────────────────────────────
@@ -341,10 +356,10 @@ async def classify_page_images(
     if screenshot:
         scores = await loop.run_in_executor(None, classifier.classify, screenshot)
         if scores:
-            nsfw_score = scores.get("porn", 0) + scores.get("hentai", 0)
+            nsfw_score = scores.get("nsfw", 0)
             logger.debug(
-                "Screenshot NSFW scores for %s: porn=%.3f hentai=%.3f sexy=%.3f",
-                domain, scores.get("porn", 0), scores.get("hentai", 0), scores.get("sexy", 0),
+                "Screenshot NSFW scores for %s: nsfw=%.3f normal=%.3f",
+                domain, nsfw_score, scores.get("normal", 0),
             )
             if nsfw_score >= threshold:
                 return True, nsfw_score, f"NSFW screenshot (score={nsfw_score:.2f})"
@@ -359,7 +374,7 @@ async def classify_page_images(
         if screenshot:
             scores = await loop.run_in_executor(None, classifier.classify, screenshot)
             if scores:
-                ss_score = scores.get("porn", 0) + scores.get("hentai", 0)
+                ss_score = scores.get("nsfw", 0)
         return False, ss_score, ""
 
     max_score = 0.0
@@ -385,7 +400,7 @@ async def classify_page_images(
                 scores = await loop.run_in_executor(None, classifier.classify, resp.content)
                 if scores is None:
                     return None
-                nsfw_score = scores.get("porn", 0) + scores.get("hentai", 0)
+                nsfw_score = scores.get("nsfw", 0)
                 return nsfw_score, url
             except Exception:
                 return None

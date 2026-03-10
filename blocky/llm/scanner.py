@@ -123,6 +123,8 @@ _META_KEEP = frozenset({
 _CDN_SUFFIXES = (
     "1e100.net",
     "googleusercontent.com",
+    "githubusercontent.com",
+    "github.io",
     "cloudfront.net",
     "amazonaws.com",
     "akamaiedge.net",
