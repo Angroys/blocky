@@ -19,10 +19,18 @@ def run_helper(action: str, timeout: int = 15, **kwargs: Any) -> dict:
         raise HelperError(
             f"Helper not found at {HELPER_PATH}. Run install.sh first."
         )
-    cmd = ["sudo", HELPER_PATH, f"--action={action}", f"--data={json.dumps(kwargs)}"]
+    data_json = json.dumps(kwargs)
+    # Use stdin for large payloads to avoid OS ARG_MAX limits
+    if len(data_json) > 65536:
+        cmd = ["sudo", HELPER_PATH, f"--action={action}", "--data=-"]
+        stdin_data = data_json
+    else:
+        cmd = ["sudo", HELPER_PATH, f"--action={action}", f"--data={data_json}"]
+        stdin_data = None
     try:
         result = subprocess.run(
             cmd,
+            input=stdin_data,
             capture_output=True,
             text=True,
             timeout=timeout,

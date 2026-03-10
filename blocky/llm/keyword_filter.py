@@ -112,6 +112,16 @@ _DOMAIN_KEYWORDS = frozenset({
     "tubegalore", "lobstertube", "thumbzilla",
     "pornmd", "nudevista", "alohatube",
     "vporn", "xbabe", "sexbot", "empflix",
+    # ── Compound keywords (catch domains like sexygirlspics, nudepics) ───
+    "sexygirl", "sexyteen", "sexymilf", "sexypic", "sexyvid",
+    "hotgirl", "hotteen", "hotmilf", "hotnude",
+    "nudegirl", "nudeteen", "nudepic", "nudevid", "nudemodel",
+    "nakedgirl", "nakedteen", "nakedpic", "nakedwomen",
+    "nsfwpic", "nsfwgirl", "nsfwvid",
+    # ── AI NSFW / deepfake ───────────────────────────────────────────────
+    "deepnude", "nudify", "undress", "clothoff", "nudefab",
+    "deepfake", "faceswap", "soulgen", "porngen",
+    "aiporn", "ainude", "ainaked",
 })
 
 # ── Tier 2: Content keywords (title / meta / body text) ─────────────────────
@@ -293,14 +303,21 @@ _MIN_BODY_KEYWORD_HITS = 3
 # inside normal words ("heroine", "japan").
 _SNI_SAFE_MIN_LEN = 4
 
+# Keywords shorter than _SNI_SAFE_MIN_LEN that are safe for SNI matching
+# because they are unambiguous adult terms unlikely to appear in normal domains.
+_SNI_SHORT_EXCEPTIONS = frozenset({"xxx"})
+
 
 def get_sni_keywords() -> list[str]:
     """Return domain keywords suitable for iptables SNI string matching.
 
-    Filters out keywords shorter than 4 chars to avoid false positives.
-    Also returns base names extracted from blocked website rules.
+    Filters out keywords shorter than 4 chars to avoid false positives,
+    except for explicitly allowed short keywords like 'xxx'.
     """
-    return sorted(kw for kw in _DOMAIN_KEYWORDS if len(kw) >= _SNI_SAFE_MIN_LEN)
+    return sorted(
+        kw for kw in _DOMAIN_KEYWORDS
+        if len(kw) >= _SNI_SAFE_MIN_LEN or kw in _SNI_SHORT_EXCEPTIONS
+    )
 
 
 def check_domain(domain: str) -> bool:

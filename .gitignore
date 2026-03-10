@@ -17,3 +17,6 @@ blocky.db
 # Local config overrides
 .env
 *.local
+
+# CodeGraph index
+.codegraph/

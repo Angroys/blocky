@@ -23,7 +23,9 @@ CHAIN_NAME = "BLOCKY_OUTPUT"
 
 ALLOWED_ACTIONS = {
     "hosts_add",
+    "hosts_add_many",
     "hosts_remove",
+    "hosts_remove_many",
     "iptables_setup",
     "iptables_teardown",
     "iptables_add_website",
@@ -172,11 +174,62 @@ def hosts_add(data: dict) -> None:
     ok()
 
 
+def hosts_add_many(data: dict) -> None:
+    """Add multiple domains to /etc/hosts in a single atomic write."""
+    domains = data.get("domains", [])
+    if not domains:
+        die("No domains provided")
+    before, block, after = _read_hosts()
+    managed = _parse_managed_lines(block)
+
+    # Build set of existing domains for O(1) lookup
+    existing_domains: set[str] = set()
+    for line in managed:
+        parts = line.strip().split()
+        if len(parts) >= 2:
+            existing_domains.add(parts[1].lower())
+
+    # Validate and collect new domains
+    new_domains: list[str] = []
+    for raw_domain in domains:
+        raw_domain = raw_domain.strip().lower()
+        if not _DOMAIN_RE.match(raw_domain):
+            continue
+        new_domains.append(raw_domain)
+
+    # Remove existing entries for domains we're re-adding (batch filter)
+    remove_set = {d for d in new_domains if d in existing_domains}
+    if remove_set:
+        managed = [l for l in managed
+                   if not (l.strip() and len(l.split()) >= 2
+                           and l.split()[1].lower() in remove_set)]
+
+    # Add all new entries
+    for domain in new_domains:
+        managed.extend(_entries_for_domain(domain))
+
+    _write_hosts(before, managed, after)
+    ok()
+
+
 def hosts_remove(data: dict) -> None:
     domain = validate_domain(data.get("domain", ""))
     before, block, after = _read_hosts()
     managed = _parse_managed_lines(block)
     managed = [l for l in managed if not (domain in l and l.strip())]
+    _write_hosts(before, managed, after)
+    ok()
+
+
+def hosts_remove_many(data: dict) -> None:
+    """Remove multiple domains from /etc/hosts in a single atomic write."""
+    domains = data.get("domains", [])
+    if not domains:
+        die("No domains provided")
+    before, block, after = _read_hosts()
+    managed = _parse_managed_lines(block)
+    domain_set = {d.strip().lower() for d in domains if d.strip()}
+    managed = [l for l in managed if not any(d in l for d in domain_set)]
     _write_hosts(before, managed, after)
     ok()
 
@@ -550,6 +603,11 @@ def sni_block_keyword(data: dict) -> None:
                     "-m", "string", "--string", kw, "--algo", "bm",
                     "-m", "comment", "--comment", comment,
                     "-j", "DROP"], v6=v6, check=False)
+        # QUIC (UDP 443) — browsers use HTTP/3 over QUIC to bypass TCP blocks
+        _iptables(["-A", SNI_CHAIN, "-p", "udp", "--dport", "443",
+                    "-m", "string", "--string", kw, "--algo", "bm",
+                    "-m", "comment", "--comment", comment,
+                    "-j", "DROP"], v6=v6, check=False)
         # HTTP (Host header)
         _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "80",
                     "-m", "string", "--string", kw, "--algo", "bm",
@@ -596,6 +654,11 @@ def sni_block_all_keywords(data: dict) -> None:
                         "-m", "string", "--string", kw, "--algo", "bm",
                         "-m", "comment", "--comment", comment,
                         "-j", "DROP"], v6=v6, check=False)
+            # QUIC (UDP 443) — browsers use HTTP/3 over QUIC to bypass TCP blocks
+            _iptables(["-A", SNI_CHAIN, "-p", "udp", "--dport", "443",
+                        "-m", "string", "--string", kw, "--algo", "bm",
+                        "-m", "comment", "--comment", comment,
+                        "-j", "DROP"], v6=v6, check=False)
             _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "80",
                         "-m", "string", "--string", kw, "--algo", "bm",
                         "-m", "comment", "--comment", comment,
@@ -615,7 +678,9 @@ def sni_unblock_all_keywords(_: dict) -> None:
 
 ACTION_MAP = {
     "hosts_add": hosts_add,
+    "hosts_add_many": hosts_add_many,
     "hosts_remove": hosts_remove,
+    "hosts_remove_many": hosts_remove_many,
     "iptables_setup": iptables_setup,
     "dns_redirect_enable": dns_redirect_enable,
     "dns_redirect_disable": dns_redirect_disable,
@@ -652,8 +717,9 @@ def main() -> None:
     if action not in ALLOWED_ACTIONS:
         die(f"Unknown action: {action!r}")
 
+    raw_data = sys.stdin.read() if args.data == "-" else args.data
     try:
-        data = json.loads(args.data)
+        data = json.loads(raw_data)
     except json.JSONDecodeError as e:
         die(f"Invalid JSON data: {e}")
 

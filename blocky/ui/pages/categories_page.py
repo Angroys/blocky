@@ -104,7 +104,7 @@ class CategoriesPage(Gtk.Box):
         name_lbl = Gtk.Label(label=cat["name"], xalign=0)
         name_lbl.add_css_class("app-name-label")
         name_box.append(name_lbl)
-        count_lbl = Gtk.Label(label=f"{len(cat['domains'])} domains", xalign=0)
+        count_lbl = Gtk.Label(label=f"{len(cat['domains']):,} domains", xalign=0)
         count_lbl.add_css_class("muted")
         name_box.append(count_lbl)
         top.append(name_box)
@@ -125,19 +125,30 @@ class CategoriesPage(Gtk.Box):
 
         card.append(top)
 
-        # ── Domain list (expandable) ─────────────────────────
+        # ── Domain list (expandable, truncated for large lists) ──
+        num_domains = len(cat["domains"])
         expander = Gtk.Expander()
-        expander.set_label(f"{len(cat['domains'])} blocked domains")
+        expander.set_label(f"{num_domains:,} blocked domains")
         expander.add_css_class("muted")
 
         domain_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         domain_box.set_margin_top(4)
         domain_box.set_margin_start(8)
 
-        for domain in sorted(cat["domains"]):
+        MAX_DISPLAY = 50
+        sorted_domains = sorted(cat["domains"])[:MAX_DISPLAY]
+        for domain in sorted_domains:
             dl = Gtk.Label(label=domain, xalign=0)
             dl.add_css_class("domain-label")
             domain_box.append(dl)
+
+        if num_domains > MAX_DISPLAY:
+            more = Gtk.Label(
+                label=f"… and {num_domains - MAX_DISPLAY:,} more domains",
+                xalign=0,
+            )
+            more.add_css_class("muted")
+            domain_box.append(more)
 
         expander.set_child(domain_box)
         card.append(expander)

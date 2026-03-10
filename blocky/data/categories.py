@@ -4,90 +4,60 @@ Each category has an id, display info, and a list of root domains.
 The blocking engine expands each domain into its subdomains automatically.
 """
 
+from pathlib import Path
+
+
+_adult_hosts_cache: list[str] | None = None
+
+
+def _load_adult_hosts() -> list[str]:
+    """Load adult domains from the external hosts file (cached after first call)."""
+    global _adult_hosts_cache
+    if _adult_hosts_cache is not None:
+        return _adult_hosts_cache
+    hosts_file = Path(__file__).parent / "adult_hosts.txt"
+    if hosts_file.exists():
+        with open(hosts_file) as f:
+            _adult_hosts_cache = [
+                line for raw in f
+                if (line := raw.strip()) and not line[0].isdigit()
+            ]
+    else:
+        _adult_hosts_cache = []
+    return _adult_hosts_cache
+
+
+class _LazyDomainList:
+    """List-like wrapper that defers loading adult_hosts.txt until first access."""
+
+    __slots__ = ()
+
+    def __iter__(self):
+        return iter(_load_adult_hosts())
+
+    def __len__(self):
+        return len(_load_adult_hosts())
+
+    def __contains__(self, item):
+        return item in _load_adult_hosts()
+
+    def __getitem__(self, index):
+        return _load_adult_hosts()[index]
+
+    def __bool__(self):
+        return bool(_load_adult_hosts())
+
+    def __repr__(self):
+        return f"<LazyDomainList: {len(self)} domains>"
+
+
 CATEGORIES: dict[str, dict] = {
     "adult": {
         "name": "Adult Content",
         "description": "Pornographic and adult websites",
         "icon": "dialog-warning-symbolic",
         "color": "red",
-        "domains": [
-            "pornhub.com",
-            "xvideos.com",
-            "xnxx.com",
-            "xhamster.com",
-            "redtube.com",
-            "youporn.com",
-            "tube8.com",
-            "spankbang.com",
-            "brazzers.com",
-            "onlyfans.com",
-            "chaturbate.com",
-            "cam4.com",
-            "livejasmin.com",
-            "bongacams.com",
-            "stripchat.com",
-            "myfreecams.com",
-            "porndig.com",
-            "porn.com",
-            "sex.com",
-            "xnxx.com",
-            "txxx.com",
-            "tnaflix.com",
-            "beeg.com",
-            "porntrex.com",
-            "4tube.com",
-            "fuq.com",
-            "drtuber.com",
-            "hdtube.porn",
-            "hentaihaven.xxx",
-            "nhentai.net",
-            "rule34.xxx",
-            "gelbooru.com",
-            "e621.net",
-            "hanime.tv",
-            "hentai2read.com",
-            "fakings.com",
-            "mofos.com",
-            "bangbros.com",
-            "realitykings.com",
-            "naughtyamerica.com",
-            "babes.com",
-            "vixen.com",
-            "blacked.com",
-            "tushy.com",
-            "girlsdoporn.com",
-            "abbywinters.com",
-            "hegre.com",
-            "atkgalleria.com",
-            # Erotic movies / softcore
-            "sexart.com",
-            "ultrafilms.com",
-            "nubilefilms.com",
-            "wowgirls.com",
-            "joymii.com",
-            "eroticax.com",
-            "bellesa.co",
-            "lustery.com",
-            "hotmovies.com",
-            "adultempire.com",
-            "aebn.com",
-            "gamelink.com",
-            "erome.com",
-            "erothots.com",
-            "eroprofile.com",
-            # More tube / aggregator
-            "eporner.com",
-            "hqporner.com",
-            "motherless.com",
-            "imagefap.com",
-            "ixxx.com",
-            "thumbzilla.com",
-            "lobstertube.com",
-            "tubegalore.com",
-            "nudevista.com",
-            "daftsex.com",
-            "sxyprn.com",
-        ],
+        "domains": _LazyDomainList(),
     },
     "gambling": {
         "name": "Gambling",
@@ -106,7 +76,7 @@ CATEGORIES: dict[str, dict] = {
             "williamhill.com",
             "ladbrokes.com",
             "coral.co.uk",
-            "paddy power.com",
+            "paddypower.com",
             "paddypower.com",
             "unibet.com",
             "bwin.com",
@@ -153,8 +123,8 @@ CATEGORIES: dict[str, dict] = {
             "x.com",
             "tiktok.com",
             "snapchat.com",
-            "reddit.com",
-            "redd.it",
+            # "reddit.com",
+            # "redd.it",
             "tumblr.com",
             "pinterest.com",
             "linkedin.com",

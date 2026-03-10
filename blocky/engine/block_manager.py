@@ -72,8 +72,41 @@ class BlockManager:
 
     def reload_all(self) -> None:
         self._watcher.clear_all_rules()
-        for rule in self.db.get_active_rules():
-            self._apply_rule(rule, notify=False)
+        rules = self.db.get_active_rules()
+
+        # Batch all website domains into a single hosts_add_many call
+        website_domains: list[str] = []
+        ip_block_domains: list[str] = []
+        for rule in rules:
+            if rule.block_type == BlockType.WEBSITE:
+                for domain in [rule.domain] + rule.extra_domains:
+                    if domain:
+                        website_domains.append(domain)
+                if rule.block_ip_layer and rule.domain:
+                    ip_block_domains.append(rule.domain)
+            elif rule.block_type == BlockType.APP:
+                self._apply_app(rule)
+
+        if website_domains:
+            try:
+                run_helper("hosts_add_many", timeout=30, domains=website_domains)
+                logger.info("Batch-restored %d website domains", len(website_domains))
+            except HelperError as e:
+                logger.warning("Batch hosts_add_many failed: %s — falling back to sequential", e)
+                for domain in website_domains:
+                    try:
+                        run_helper("hosts_add", domain=domain)
+                    except HelperError as e:
+                        logger.error("Failed to block %s: %s", domain, e)
+
+        # IP-layer blocking in background with concurrency
+        if ip_block_domains:
+            def _ip_block():
+                from concurrent.futures import ThreadPoolExecutor as _Pool
+                with _Pool(max_workers=20, thread_name_prefix="ip-block") as pool:
+                    pool.map(self._block_domain_ips, ip_block_domains)
+            threading.Thread(target=_ip_block, daemon=True, name="reload-ip-block").start()
+
         logger.info("Reloaded all active rules")
 
     def _restore_categories(self) -> None:
@@ -300,11 +333,16 @@ class BlockManager:
         if not cat:
             return
 
-        for domain in cat["domains"]:
-            try:
-                run_helper("hosts_remove", domain=domain)
-            except HelperError as e:
-                logger.error("Category unblock failed for %s: %s", domain, e)
+        domains = list(cat["domains"])
+        try:
+            run_helper("hosts_remove_many", timeout=30, domains=domains)
+            logger.info("Category %s: batch-unblocked %d domains", category_id, len(domains))
+        except HelperError:
+            for domain in domains:
+                try:
+                    run_helper("hosts_remove", domain=domain)
+                except HelperError as e:
+                    logger.error("Category unblock failed for %s: %s", domain, e)
 
         # Disable DNS redirect if it was on for this category
         db_cat = self.db.get_category(category_id)
@@ -329,11 +367,19 @@ class BlockManager:
             logger.warning("Unknown category: %s", category_id)
             return
 
-        for domain in cat["domains"]:
-            try:
-                run_helper("hosts_add", domain=domain)
-            except HelperError as e:
-                logger.error("Category block failed for %s: %s", domain, e)
+        domains = list(cat["domains"])
+        try:
+            # Batch add — single helper call for all domains
+            run_helper("hosts_add_many", timeout=30, domains=domains)
+            logger.info("Category %s: batch-blocked %d domains", category_id, len(domains))
+        except HelperError:
+            # Fallback to one-by-one if batch not available (old helper)
+            logger.info("Batch add unavailable, falling back to sequential")
+            for domain in domains:
+                try:
+                    run_helper("hosts_add", domain=domain)
+                except HelperError as e:
+                    logger.error("Category block failed for %s: %s", domain, e)
 
         if smart_detect:
             try:
@@ -462,6 +508,18 @@ class BlockManager:
             self.disable_llm_detection()
             self.enable_llm_detection()
 
+    # Domains that must never be auto-blocked by the scanner.
+    # These are critical infrastructure / developer resources.
+    _NEVER_BLOCK = frozenset({
+        "raw.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "github.com",
+        "api.github.com",
+        "gist.githubusercontent.com",
+        "camo.githubusercontent.com",
+        "avatars.githubusercontent.com",
+    })
+
     def _auto_block_domain(self, domain: str, reason: str, ip: str | None = None) -> None:
         """Called by scanner when a domain is classified as adult.
 
@@ -471,6 +529,11 @@ class BlockManager:
         """
         from datetime import datetime as _dt
         from gi.repository import GLib
+
+        # Never block critical infrastructure domains
+        if domain in self._NEVER_BLOCK:
+            logger.info("Skipping auto-block for protected domain: %s", domain)
+            return
 
         # Guard: check not already blocked
         for rule in self.db.get_all_rules():

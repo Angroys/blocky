@@ -631,6 +631,173 @@ class DomainScanner(threading.Thread):
     # Number of parallel prescan workers draining the link queue
     _PRESCAN_WORKERS = 4
 
+    # ── Continuous screenshot monitor ────────────────────────────────────────
+    _SCREENSHOT_INTERVAL = 5.0  # seconds between screenshots
+    _SCREENSHOT_COOLDOWN = 60.0  # don't re-block same domain within this window
+
+    async def _screenshot_monitor(self) -> None:
+        """Continuously screenshot the browser window and classify for NSFW."""
+        import time
+        if not self._nsfw_classifier:
+            logger.info("Screenshot monitor disabled — no NSFW classifier")
+            return
+
+        from blocky.llm.image_scanner import (
+            _take_screenshot, _detect_screenshot_backend
+        )
+
+        backend = _detect_screenshot_backend()
+        if not backend:
+            logger.warning("Screenshot monitor disabled — no screenshot backend")
+            return
+
+        logger.info("Continuous screenshot monitor started (interval=%.1fs, backend=%s)",
+                    self._SCREENSHOT_INTERVAL, backend)
+
+        loop = asyncio.get_event_loop()
+        recently_blocked: dict[str, float] = {}  # domain → expiry time
+
+        while not self._stop_event.is_set():
+            try:
+                screenshot = await _take_screenshot("screen-monitor")
+                if not screenshot:
+                    await asyncio.sleep(self._SCREENSHOT_INTERVAL)
+                    continue
+
+                scores = await loop.run_in_executor(
+                    None, self._nsfw_classifier.classify, screenshot
+                )
+                if not scores:
+                    await asyncio.sleep(self._SCREENSHOT_INTERVAL)
+                    continue
+
+                nsfw_prob = scores.get("nsfw", 0)
+                now = time.monotonic()
+
+                # Log every scan result
+                logger.info(
+                    "Screen scan: nsfw=%.3f normal=%.3f (threshold=%.2f)",
+                    nsfw_prob, scores.get("normal", 0), self._image_threshold,
+                )
+
+                if nsfw_prob >= self._image_threshold:
+                    # Try to identify which domain from browser window title
+                    domain = await self._get_browser_domain()
+                    logger.info("NSFW detected on screen! Identified domain: %s", domain)
+                    if not domain:
+                        domain = "unknown-screen"
+
+                    # Cooldown — don't spam blocks for the same domain
+                    if domain in recently_blocked and now < recently_blocked[domain]:
+                        logger.info("Screenshot NSFW for %s but in cooldown (%.0fs left)",
+                                   domain, recently_blocked[domain] - now)
+                        await asyncio.sleep(self._SCREENSHOT_INTERVAL)
+                        continue
+
+                    recently_blocked[domain] = now + self._SCREENSHOT_COOLDOWN
+                    reason = f"NSFW screen content detected (score={nsfw_prob:.2f})"
+                    logger.warning(
+                        "SCREENSHOT BLOCKED: %s — nsfw=%.3f normal=%.3f",
+                        domain, nsfw_prob, scores.get("normal", 0),
+                    )
+
+                    # Save to LLM cache and trigger block
+                    self.db.set_llm_cache(domain, True, nsfw_prob, "image-scanner")
+                    self.on_adult(domain, reason, None)
+
+                # Evict expired cooldowns
+                recently_blocked = {d: t for d, t in recently_blocked.items() if now < t}
+
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.error("Screenshot monitor error: %s", e)
+
+            await asyncio.sleep(self._SCREENSHOT_INTERVAL)
+
+        logger.info("Continuous screenshot monitor stopped")
+
+    @staticmethod
+    def _domain_from_title(title: str) -> Optional[str]:
+        """Extract a domain from a browser window title string."""
+        import re
+
+        # Check for URL in title
+        url_match = re.search(r'https?://([^/\s]+)', title)
+        if url_match:
+            domain = url_match.group(1).lower()
+            if domain.startswith("www."):
+                domain = domain[4:]
+            return domain
+
+        # Check for domain-like pattern (e.g., "example.com" in the title)
+        domain_match = re.search(r'[\w-]+\.[\w.-]+\.\w{2,}', title)
+        if domain_match:
+            return domain_match.group(0).lower()
+
+        # Last resort: use the title part before the browser name separator
+        for sep in (" - ", " — ", " | ", " – "):
+            if sep in title:
+                parts = title.split(sep)
+                site = parts[0].strip().lower()
+                if "." in site and " " not in site:
+                    return site
+
+        return None
+
+    async def _get_browser_domain(self) -> Optional[str]:
+        """Try to get the current domain from the browser window title.
+
+        Supports both X11 (xdotool) and Wayland/Hyprland (hyprctl).
+        """
+        import os as _os
+        import shutil as _shutil
+
+        title: str | None = None
+
+        # Hyprland: use hyprctl to get browser window title
+        if _os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+            try:
+                from blocky.llm.image_scanner import _find_hyprland_browser_window
+                browser = await _find_hyprland_browser_window()
+                if browser:
+                    title = browser[0]  # (title, at, size)
+                    logger.debug("Hyprland browser window title: %s", title)
+                else:
+                    # Fallback to active window
+                    proc = await asyncio.create_subprocess_exec(
+                        "hyprctl", "activewindow", "-j",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL,
+                    )
+                    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3.0)
+                    if proc.returncode == 0 and stdout.strip():
+                        import json as _json
+                        win = _json.loads(stdout.decode())
+                        title = win.get("title", "")
+            except Exception:
+                pass
+
+        # X11: use xdotool
+        if not title and _shutil.which("xdotool"):
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "xdotool", "getactivewindow", "getwindowname",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3.0)
+                if proc.returncode == 0 and stdout.strip():
+                    title = stdout.decode().strip()
+                    logger.debug("X11 browser window title: %s", title)
+            except Exception:
+                pass
+
+        if not title:
+            return None
+
+        return self._domain_from_title(title)
+
     async def _scan_loop(self) -> None:
         import time
         # Start multiple pre-scan background workers for concurrent link classification
@@ -638,6 +805,9 @@ class DomainScanner(threading.Thread):
             asyncio.ensure_future(self._prescan_worker())
             for _ in range(self._PRESCAN_WORKERS)
         ]
+        # Screenshot monitor disabled for now
+        # screenshot_task = asyncio.ensure_future(self._screenshot_monitor())
+
         seen_expiry = time.monotonic() + self._SEEN_TTL
         try:
             while not self._stop_event.is_set():
@@ -673,6 +843,7 @@ class DomainScanner(threading.Thread):
 
                 await asyncio.sleep(self.scan_interval)
         finally:
+            # screenshot_task.cancel()
             for t in prescan_tasks:
                 t.cancel()
 
