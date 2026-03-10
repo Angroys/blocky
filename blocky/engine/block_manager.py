@@ -86,6 +86,10 @@ class BlockManager:
         if self.db.get_setting("llm_enabled", "0") == "1":
             self.enable_llm_detection()
 
+        # Restore SNI keyword blocking if adult category was active
+        if self.is_category_active("adult"):
+            self.enable_sni_keyword_blocking()
+
     # ── Block rule CRUD ──────────────────────────────────────────────────────
 
     def activate_rule(self, rule: BlockRule) -> None:
@@ -283,6 +287,8 @@ class BlockManager:
     def activate_category(self, category_id: str, smart_detect: bool = False) -> None:
         """Block all domains in a category. Optionally enable DNS-level smart detection."""
         self._apply_category(category_id, smart_detect=smart_detect, save=True)
+        if category_id == "adult":
+            self.enable_sni_keyword_blocking()
         self.db.log_activity(None, f"[Category] {category_id}", "activated")
         self._notify()
 
@@ -305,6 +311,9 @@ class BlockManager:
                 run_helper("dns_redirect_disable")
             except HelperError as e:
                 logger.warning("dns_redirect_disable failed: %s", e)
+
+        if category_id == "adult":
+            self.disable_sni_keyword_blocking()
 
         self.db.set_category_active(category_id, False)
         self.db.log_activity(None, f"[Category] {category_id}", "paused")
@@ -341,6 +350,44 @@ class BlockManager:
     def is_smart_detect_active(self, category_id: str) -> bool:
         cat = self.db.get_category(category_id)
         return bool(cat and cat.get("smart_detect"))
+
+    # ── SNI keyword blocking ─────────────────────────────────────────────────
+
+    def enable_sni_keyword_blocking(self) -> None:
+        """Block TLS connections whose SNI contains adult keywords.
+
+        Runs in a background thread because adding 250+ iptables rules
+        takes several seconds.
+        """
+        def _apply():
+            from blocky.llm.keyword_filter import get_sni_keywords
+
+            keywords = get_sni_keywords()
+
+            # Also extract base names from blocked website rules for variant blocking.
+            # e.g. if xhamster.com is blocked, add "xhamster" so xhamster.desi is also caught.
+            for rule in self.db.get_all_rules():
+                if rule.block_type == BlockType.WEBSITE and rule.domain:
+                    base = rule.domain.split(".")[0]
+                    if len(base) >= 4 and base not in keywords:
+                        keywords.append(base)
+
+            keywords = sorted(set(keywords))
+            try:
+                run_helper("sni_block_all_keywords", timeout=120, keywords=keywords)
+                logger.info("SNI keyword blocking enabled (%d keywords)", len(keywords))
+            except HelperError as e:
+                logger.error("SNI keyword blocking failed: %s", e)
+
+        threading.Thread(target=_apply, daemon=True, name="sni-keywords").start()
+
+    def disable_sni_keyword_blocking(self) -> None:
+        """Remove all SNI keyword iptables rules."""
+        try:
+            run_helper("sni_unblock_all_keywords")
+            logger.info("SNI keyword blocking disabled")
+        except HelperError as e:
+            logger.error("Failed to disable SNI keyword blocking: %s", e)
 
     # ── LLM content detection ────────────────────────────────────────────────
 
@@ -452,6 +499,17 @@ class BlockManager:
         rule.id = rule_id
         self._apply_website(rule)
         self.db.log_activity(rule_id, domain, f"LLM auto-blocked: {reason}")
+
+        # Also add the base name as an SNI keyword to block variant TLDs
+        # e.g. blocking xhamster.com also blocks xhamster.desi, xhamster.one, etc.
+        base = domain.split(".")[0]
+        if len(base) >= 4 and self.is_category_active("adult"):
+            try:
+                run_helper("sni_block_keyword", keyword=base)
+                logger.info("SNI keyword added for variant blocking: %s", base)
+            except HelperError:
+                pass
+
         GLib.idle_add(self._notify)
 
         # Verify the block is effective by attempting a connection to the IP

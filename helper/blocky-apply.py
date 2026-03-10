@@ -40,6 +40,10 @@ ALLOWED_ACTIONS = {
     "cgroup_create",
     "cgroup_add_pid",
     "cgroup_remove_pid",
+    "sni_block_keyword",
+    "sni_unblock_keyword",
+    "sni_block_all_keywords",
+    "sni_unblock_all_keywords",
 }
 
 TEMP_CHAIN = "BLOCKY_TEMP"
@@ -504,6 +508,109 @@ def kill_connections(data: dict) -> None:
     ok()
 
 
+# ----- SNI keyword blocking -----
+# Block TLS connections where the SNI (Server Name Indication) in the
+# ClientHello contains an adult keyword.  This catches domains behind CDNs
+# where IP-based resolution fails (e.g. Cloudflare shared certs).
+# Also matches HTTP Host headers on port 80.
+
+SNI_CHAIN = "BLOCKY_SNI"
+SNI_COMMENT_PREFIX = "blocky-sni-"
+_KEYWORD_RE = re.compile(r"^[a-zA-Z0-9\-]{2,40}$")
+
+
+def _validate_keyword(kw: str) -> str:
+    kw = kw.strip().lower()
+    if not _KEYWORD_RE.match(kw):
+        die(f"Invalid keyword: {kw!r}")
+    return kw
+
+
+def _ensure_sni_chain() -> None:
+    """Create BLOCKY_SNI chain and hook into OUTPUT if needed."""
+    for v6 in (False, True):
+        _iptables(["-N", SNI_CHAIN], v6=v6, check=False)
+        if not _iptables(["-C", "OUTPUT", "-j", SNI_CHAIN], v6=v6, check=False):
+            _iptables(["-I", "OUTPUT", "-j", SNI_CHAIN], v6=v6)
+
+
+def sni_block_keyword(data: dict) -> None:
+    """Add iptables string-match rules to block TLS SNI containing *keyword*."""
+    kw = _validate_keyword(data.get("keyword", ""))
+    comment = f"{SNI_COMMENT_PREFIX}{kw}"
+    _ensure_sni_chain()
+    for v6 in (False, True):
+        # Skip if rule already exists
+        if _iptables(["-C", SNI_CHAIN, "-p", "tcp", "--dport", "443",
+                       "-m", "string", "--string", kw, "--algo", "bm",
+                       "-j", "DROP"], v6=v6, check=False):
+            continue
+        # HTTPS (TLS SNI)
+        _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "443",
+                    "-m", "string", "--string", kw, "--algo", "bm",
+                    "-m", "comment", "--comment", comment,
+                    "-j", "DROP"], v6=v6, check=False)
+        # HTTP (Host header)
+        _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "80",
+                    "-m", "string", "--string", kw, "--algo", "bm",
+                    "-m", "comment", "--comment", comment,
+                    "-j", "DROP"], v6=v6, check=False)
+    ok()
+
+
+def sni_unblock_keyword(data: dict) -> None:
+    """Remove SNI string-match rules for *keyword*."""
+    kw = _validate_keyword(data.get("keyword", ""))
+    comment = f"{SNI_COMMENT_PREFIX}{kw}"
+    for v6 in (False, True):
+        cmd = ["ip6tables" if v6 else "iptables", "-S", SNI_CHAIN]
+        result = _run(cmd, check=False)
+        if result.returncode != 0:
+            continue
+        for line in result.stdout.splitlines():
+            if comment in line:
+                del_args = line.replace("-A", "-D", 1).split()
+                _iptables(del_args, v6=v6, check=False)
+    ok()
+
+
+def sni_block_all_keywords(data: dict) -> None:
+    """Block a list of keywords in one call. data["keywords"] = ["porn", "xxx", ...]"""
+    keywords = data.get("keywords", [])
+    if not isinstance(keywords, list):
+        die("keywords must be a list")
+    _ensure_sni_chain()
+    blocked = 0
+    for kw in keywords:
+        try:
+            kw = _validate_keyword(kw)
+        except SystemExit:
+            continue
+        comment = f"{SNI_COMMENT_PREFIX}{kw}"
+        for v6 in (False, True):
+            if _iptables(["-C", SNI_CHAIN, "-p", "tcp", "--dport", "443",
+                           "-m", "string", "--string", kw, "--algo", "bm",
+                           "-j", "DROP"], v6=v6, check=False):
+                continue
+            _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "443",
+                        "-m", "string", "--string", kw, "--algo", "bm",
+                        "-m", "comment", "--comment", comment,
+                        "-j", "DROP"], v6=v6, check=False)
+            _iptables(["-A", SNI_CHAIN, "-p", "tcp", "--dport", "80",
+                        "-m", "string", "--string", kw, "--algo", "bm",
+                        "-m", "comment", "--comment", comment,
+                        "-j", "DROP"], v6=v6, check=False)
+        blocked += 1
+    ok({"blocked": blocked})
+
+
+def sni_unblock_all_keywords(_: dict) -> None:
+    """Remove all SNI keyword rules."""
+    for v6 in (False, True):
+        _iptables(["-F", SNI_CHAIN], v6=v6, check=False)
+    ok()
+
+
 # ----- Dispatch -----
 
 ACTION_MAP = {
@@ -525,6 +632,10 @@ ACTION_MAP = {
     "cgroup_create": cgroup_create,
     "cgroup_add_pid": cgroup_add_pid,
     "cgroup_remove_pid": cgroup_remove_pid,
+    "sni_block_keyword": sni_block_keyword,
+    "sni_unblock_keyword": sni_unblock_keyword,
+    "sni_block_all_keywords": sni_block_all_keywords,
+    "sni_unblock_all_keywords": sni_unblock_all_keywords,
 }
 
 

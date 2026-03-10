@@ -10,7 +10,7 @@ class HelperError(Exception):
     pass
 
 
-def run_helper(action: str, **kwargs: Any) -> dict:
+def run_helper(action: str, timeout: int = 15, **kwargs: Any) -> dict:
     """
     Call the privileged helper via sudo.
     Returns parsed JSON response. Raises HelperError on failure.
@@ -25,7 +25,7 @@ def run_helper(action: str, **kwargs: Any) -> dict:
             cmd,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
         raise HelperError(f"Helper timed out for action {action!r}")

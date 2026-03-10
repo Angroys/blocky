@@ -15,45 +15,103 @@ import re
 # put these words in their domain names.
 
 _DOMAIN_KEYWORDS = frozenset({
-    # English
-    "porn", "xxx", "xvideo", "xnxx", "xhamster", "redtube", "youporn",
-    "brazzers", "onlyfans", "chaturbate", "livejasmin", "bongacam",
-    "stripchat", "myfreecam", "spankbang", "tube8", "hentai",
-    "pornhub", "xvideos", "cam4", "fapdu", "xerotica",
-    "sexcam", "porntube", "adultvideo", "camgirl", "camboy",
-    "nudelive", "porndig", "pornpic", "sexpic", "fap",
-    "pinkdino", "viewgal", "babesource", "elitebabes",
-    "bbwporn", "analpic", "crazysex", "auntmia",
-    "eporner", "8muses", "rule34", "gelbooru", "danbooru",
-    "nhentai", "hanime", "hclip", "sexvid", "xxxbunker",
-    "motherless", "imagefap", "slutload", "pictoa",
+    # ── Major tube / streaming sites ────────────────────────────────────
+    "porn", "pornhub", "xvideo", "xvideos", "xnxx", "xhamster",
+    "redtube", "youporn", "tube8", "xtube", "porntube", "porndoe",
+    "porndig", "pornpic", "porntrex", "pornrox", "pornone",
+    "porndish", "porngo", "pornhat", "pornid", "pornjam",
+    "pornktube", "pornlib", "pornmate", "pornmz", "pornobae",
+    "pornolab", "pornovoisines", "pornoxo", "pornsos", "porntop",
+    "pornzog", "tnaflix", "drtuber", "voyeurhit", "txxx",
+    "fuq", "beeg", "youjizz", "jizzbunker", "jizzplanet",
+    "ixxx", "xfree", "xmovie", "4tube", "sunporno",
+    "anysex", "gotporn", "hclips", "hclip", "hqporner",
+    "3movs", "fapcat", "fapdu", "daftsex", "sxyprn",
+    "eporner", "spankbang", "spankwire", "slutload",
+    "xxxbunker", "xxx", "sexvid", "sextube",
+    # ── Premium / studio sites ──────────────────────────────────────────
+    "brazzers", "naughtyamerica", "bangbros", "realitykings",
+    "mofos", "tushy", "blacked", "vixen", "babes",
+    "nubile", "hegre", "metart", "femjoy", "playboy",
+    "playboyplus", "penthouse", "hustler", "hustlermagazine",
+    "wickedpictures", "digitalplayground", "kink", "girlsway",
+    "adultime", "dorcel", "marc-dorcel", "private",
+    "twistys", "ztod", "julesjordan", "evilangel",
+    "letsdoeit", "fakehub", "faketaxi", "fakehospital",
+    "sexyhub", "puremature", "passion-hd", "fantasyhd",
+    "castingcouch", "backroom", "exploitedcollegegirls",
+    "woodmancastingx", "legalporno", "analvids",
+    "swallowed", "throated", "teenflip", "hookuphotshot",
+    "blackedraw", "deeper", "slayed", "milfy",
+    # ── Cam / live sites ────────────────────────────────────────────────
+    "onlyfans", "chaturbate", "livejasmin", "bongacam",
+    "stripchat", "myfreecam", "cam4", "camsoda",
+    "flirt4free", "streamate", "imlive", "camster",
+    "sexcam", "camgirl", "camboy", "nudelive",
+    "bimbim", "jerkmate", "rabbits",
+    # ── Hentai / anime / drawn ──────────────────────────────────────────
+    "hentai", "nhentai", "hanime", "hentaihaven",
+    "hentaistream", "hentaimama", "hentaigasm", "hentaiworld",
+    "rule34", "gelbooru", "danbooru", "konachan",
+    "e-hentai", "exhentai", "hitomi", "pururin",
+    "fakku", "tsumino", "luscious", "8muses",
+    "multporn", "doujin", "mangahentai",
+    # ── Image / gallery sites ───────────────────────────────────────────
+    "imagefap", "motherless", "pictoa", "xerotica",
+    "viewgal", "babesource", "elitebabes", "definebabe",
+    "babepedia", "kindgirls", "erosberry", "hegrehunter",
+    "ftvgirls", "suicidegirl", "zishy", "femjoyhunter",
+    "pornpic", "sexpic", "analpic",
+    "pinkdino", "watchmygf", "anon-v",
+    # ── Escort / hookup ─────────────────────────────────────────────────
+    "escort", "escortbabylon", "cityxguide", "eros",
+    "skipthegames", "megapersonals", "bedpage",
+    "adultfriendfinder", "ashleymadison", "fling",
+    "hookup", "banglocals", "benaughty",
+    # ── Explicit act keywords (domain substrings) ───────────────────────
     "deepthroat", "creampie", "gangbang", "cumshot",
-    "bukkake", "bondage", "hardcore", "softcore",
+    "bukkake", "blowjob", "handjob", "footjob", "titjob",
+    "bondage", "hardcore", "softcore",
     "threesome", "foursome", "orgy", "milf",
-    "naughtyamerica", "bangbros", "realitykings",
-    "mofos", "tushy", "blacked", "vixen",
-    "nubile", "hegre", "metart", "femjoy",
-    "suicidegirl", "playboyplus", "penthouse",
-    "hustler", "wickedpictures", "digitalplayground",
-    "jav", "javhd", "uncensored", "hclips",
-    "tnaflix", "drtuber", "voyeurhit", "txxx",
-    "fuq", "beeg", "youjizz", "jizzbunker",
-    "ixxx", "xfree", "xmovie", "porndoe", "porcore",
-    "4tube", "sunporno", "anysex", "gotporn", "sexvid",
-    "definebabe", "watchmygf", "anon-v", "sxyprn",
-    "daftsex", "hqporner", "3movs", "fapcat",
-    # Spanish
-    "porno", "sexo", "desnuda",
-    # French
-    "sexe", "coquin",
-    # German
-    "ficken", "nackt",
-    # Portuguese
-    "putaria", "safada",
-    # Russian (transliterated)
-    "porno", "seks",
-    # Japanese (romanized)
-    "eromanga", "ero",
+    "fap", "cuckold", "incest", "voyeur",
+    "fisting", "squirt", "pegging",
+    "bbwporn", "crazysex", "auntmia",
+    # ── JAV / Asian ─────────────────────────────────────────────────────
+    "jav", "javhd", "javlibrary", "javguru", "javbangers",
+    "javfinder", "javfull", "javhihi", "javmost", "javplay",
+    "uncensored", "caribbeancom", "tokyohot", "1pondo",
+    "heyzo", "s-cute",
+    # ── Spanish ─────────────────────────────────────────────────────────
+    "porno", "sexo", "desnuda", "putita", "follando",
+    "culonas", "tetonas", "corridas",
+    # ── French ──────────────────────────────────────────────────────────
+    "sexe", "coquin", "salope", "beurette",
+    # ── German ──────────────────────────────────────────────────────────
+    "ficken", "nackt", "schwanz", "titten", "fotze",
+    # ── Portuguese ──────────────────────────────────────────────────────
+    "putaria", "safada", "gostosa", "bundas",
+    # ── Russian (transliterated) ────────────────────────────────────────
+    "porno", "seks", "sosalka", "shlyuha",
+    # ── Japanese (romanized) ────────────────────────────────────────────
+    "eromanga", "oppai", "ecchi",
+    # ── Erotic movies / softcore / adult cinema ───────────────────────
+    "eroticmovie", "eroticfilm", "erotica",
+    "adultmovie", "adultfilm", "adultcinema",
+    "sexmovie", "sexfilm", "sexcinema",
+    "nakedsword", "hotmovies", "adultdvd",
+    "adultvod", "aebn", "adultempire", "gamelink",
+    "sexart", "xconfession", "lustery",
+    "bellesa", "wowgirls", "ultrafilms", "joymii",
+    "nubilefilms", "eroticax", "darkx",
+    "eroprofile", "erome", "erothots",
+    # ── Other aggregators / link sites ──────────────────────────────────
+    "xbabe", "xbef", "xcafe", "xgroovy", "xkeezmovies",
+    "xlxx", "xmegadrive", "xpee", "xrares",
+    "ashemaletube", "trannytube", "shemale",
+    "femdomtube", "bdsmstreak", "fetishpapa",
+    "tubegalore", "lobstertube", "thumbzilla",
+    "pornmd", "nudevista", "alohatube",
+    "vporn", "xbabe", "sexbot", "empflix",
 })
 
 # ── Tier 2: Content keywords (title / meta / body text) ─────────────────────
@@ -227,6 +285,22 @@ _SAFE_CONTEXT = [
 # Minimum number of distinct content keyword matches needed in body text
 # to trigger blocking (when no title match). Higher = fewer false positives.
 _MIN_BODY_KEYWORD_HITS = 3
+
+
+# Keywords safe for iptables SNI string matching.
+# Must be long enough to avoid false positives in raw packet data.
+# Short words like "ero", "fap", "jav" are excluded — they could match
+# inside normal words ("heroine", "japan").
+_SNI_SAFE_MIN_LEN = 4
+
+
+def get_sni_keywords() -> list[str]:
+    """Return domain keywords suitable for iptables SNI string matching.
+
+    Filters out keywords shorter than 4 chars to avoid false positives.
+    Also returns base names extracted from blocked website rules.
+    """
+    return sorted(kw for kw in _DOMAIN_KEYWORDS if len(kw) >= _SNI_SAFE_MIN_LEN)
 
 
 def check_domain(domain: str) -> bool:
