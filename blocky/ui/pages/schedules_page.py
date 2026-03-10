@@ -4,6 +4,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
 from blocky.models.schedule import RecurrenceType, Schedule
+from blocky.scheduler.scheduler import is_schedule_in_window
 
 
 DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"]
@@ -97,6 +98,17 @@ class SchedulesPage(Gtk.Box):
         name_lbl.set_hexpand(True)
         header.append(name_lbl)
 
+        # Strict lock indicator
+        strict_locked = schedule.strict and is_schedule_in_window(schedule)
+        if schedule.strict:
+            lock_icon = Gtk.Image.new_from_icon_name("changes-prevent-symbolic")
+            lock_icon.set_pixel_size(16)
+            header.append(lock_icon)
+            strict_lbl = Gtk.Label(label="STRICT")
+            strict_lbl.add_css_class("badge")
+            strict_lbl.add_css_class("destructive-action")
+            header.append(strict_lbl)
+
         # Time range
         time_lbl = Gtk.Label(label=f"{schedule.start_time} – {schedule.end_time}")
         time_lbl.add_css_class("domain-label")
@@ -106,6 +118,9 @@ class SchedulesPage(Gtk.Box):
         toggle = Gtk.Switch()
         toggle.set_active(schedule.active)
         toggle.set_valign(Gtk.Align.CENTER)
+        toggle.set_sensitive(not strict_locked)
+        if strict_locked:
+            toggle.set_tooltip_text("Cannot disable while strict schedule is active")
         toggle.connect("state-set", self._on_toggle, schedule)
         header.append(toggle)
 
@@ -113,6 +128,7 @@ class SchedulesPage(Gtk.Box):
         del_btn = Gtk.Button(icon_name="user-trash-symbolic")
         del_btn.add_css_class("destructive-action")
         del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.set_sensitive(not strict_locked)
         del_btn.connect("clicked", self._on_delete, schedule)
         header.append(del_btn)
 
@@ -214,6 +230,7 @@ class SchedulesPage(Gtk.Box):
             weekday_mask=mask,
             start_time=start_time,
             end_time=end_time,
+            strict=dlg.strict_toggle.get_active(),
         )
 
         db = self.window.get_db()
@@ -318,6 +335,27 @@ class AddScheduleDialog(Adw.MessageDialog):
             self.day_buttons.append(btn)
             days_box.append(btn)
         box.append(days_box)
+
+        # Strict mode toggle
+        strict_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        strict_box.set_margin_top(8)
+        strict_info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        strict_info.set_hexpand(True)
+        strict_title = Gtk.Label(label="Strict mode", xalign=0)
+        strict_title.add_css_class("app-name-label")
+        strict_info.append(strict_title)
+        strict_sub = Gtk.Label(
+            label="Prevent disabling rules during this schedule",
+            xalign=0,
+            wrap=True,
+        )
+        strict_sub.add_css_class("muted")
+        strict_info.append(strict_sub)
+        strict_box.append(strict_info)
+        self.strict_toggle = Gtk.Switch()
+        self.strict_toggle.set_valign(Gtk.Align.CENTER)
+        strict_box.append(self.strict_toggle)
+        box.append(strict_box)
 
         self.set_extra_child(box)
 

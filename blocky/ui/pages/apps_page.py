@@ -138,10 +138,23 @@ class AppsPage(Gtk.Box):
         mode_badge.add_css_class(mode_colors.get(rule.block_mode, "app"))
         card.append(mode_badge)
 
+        # Strict lock detection
+        bm = self.window.get_block_manager()
+        locked = bm.is_rule_locked(rule) if bm else False
+        if locked:
+            lock_icon = Gtk.Image.new_from_icon_name("changes-prevent-symbolic")
+            lock_icon.set_pixel_size(16)
+            card.append(lock_icon)
+            lock_badge = Gtk.Label(label="LOCKED")
+            lock_badge.add_css_class("badge")
+            lock_badge.add_css_class("destructive-action")
+            card.append(lock_badge)
+
         # Toggle
         toggle = Gtk.Switch()
         toggle.set_active(rule.status == BlockStatus.ACTIVE)
         toggle.set_valign(Gtk.Align.CENTER)
+        toggle.set_sensitive(not locked)
         toggle.connect("state-set", self._on_toggle, rule)
         card.append(toggle)
 
@@ -149,6 +162,7 @@ class AppsPage(Gtk.Box):
         del_btn = Gtk.Button(icon_name="user-trash-symbolic")
         del_btn.add_css_class("destructive-action")
         del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.set_sensitive(not locked)
         del_btn.connect("clicked", self._on_delete, rule)
         card.append(del_btn)
 

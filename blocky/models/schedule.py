@@ -20,3 +20,4 @@ class Schedule:
     id: Optional[int] = None
     weekday_mask: int = 0b0111110  # Mon-Fri default (bits 1-5)
     active: bool = True
+    strict: bool = False

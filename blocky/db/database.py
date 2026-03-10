@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS schedules (
     weekday_mask INTEGER DEFAULT 0,
     start_time TEXT NOT NULL,
     end_time TEXT NOT NULL,
-    active INTEGER DEFAULT 1
+    active INTEGER DEFAULT 1,
+    strict INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS block_rules (
@@ -75,6 +76,11 @@ class Database:
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        # Migrations for existing databases
+        try:
+            self._conn.execute("ALTER TABLE schedules ADD COLUMN strict INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         self._conn.commit()
 
     def _rule_from_row(self, row: sqlite3.Row) -> BlockRule:
@@ -103,6 +109,7 @@ class Database:
             start_time=row["start_time"],
             end_time=row["end_time"],
             active=bool(row["active"]),
+            strict=bool(row["strict"]),
         )
 
     # --- Block Rules ---
@@ -195,8 +202,8 @@ class Database:
 
     def add_schedule(self, schedule: Schedule) -> int:
         cur = self._conn.execute(
-            """INSERT INTO schedules (name, recurrence, weekday_mask, start_time, end_time, active)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO schedules (name, recurrence, weekday_mask, start_time, end_time, active, strict)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 schedule.name,
                 schedule.recurrence.value,
@@ -204,6 +211,7 @@ class Database:
                 schedule.start_time,
                 schedule.end_time,
                 int(schedule.active),
+                int(schedule.strict),
             ),
         )
         self._conn.commit()
@@ -212,7 +220,7 @@ class Database:
     def update_schedule(self, schedule: Schedule) -> None:
         self._conn.execute(
             """UPDATE schedules SET name=?, recurrence=?, weekday_mask=?,
-               start_time=?, end_time=?, active=? WHERE id=?""",
+               start_time=?, end_time=?, active=?, strict=? WHERE id=?""",
             (
                 schedule.name,
                 schedule.recurrence.value,
@@ -220,6 +228,7 @@ class Database:
                 schedule.start_time,
                 schedule.end_time,
                 int(schedule.active),
+                int(schedule.strict),
                 schedule.id,
             ),
         )

@@ -10,8 +10,14 @@ from blocky.db.database import Database
 from blocky.engine.helper_client import HelperError, run_helper
 from blocky.engine.process_watcher import ProcessWatcher
 from blocky.models.block_rule import BlockRule, BlockStatus, BlockType
+from blocky.scheduler.scheduler import is_schedule_in_window
 
 logger = logging.getLogger(__name__)
+
+
+class StrictScheduleError(Exception):
+    """Raised when trying to deactivate/delete a rule locked by a strict schedule."""
+    pass
 
 
 class BlockManager:
@@ -125,6 +131,17 @@ class BlockManager:
         if self.is_category_active("adult"):
             self.enable_sni_keyword_blocking()
 
+    # ── Schedule lock helpers ────────────────────────────────────────────────
+
+    def is_rule_locked(self, rule: BlockRule) -> bool:
+        """True if the rule is under an active strict schedule right now."""
+        if not rule.schedule_id:
+            return False
+        schedule = self.db.get_schedule(rule.schedule_id)
+        if not schedule or not schedule.strict:
+            return False
+        return is_schedule_in_window(schedule)
+
     # ── Block rule CRUD ──────────────────────────────────────────────────────
 
     def activate_rule(self, rule: BlockRule) -> None:
@@ -135,6 +152,10 @@ class BlockManager:
         self._notify()
 
     def deactivate_rule(self, rule: BlockRule) -> None:
+        if self.is_rule_locked(rule):
+            raise StrictScheduleError(
+                f"Cannot deactivate '{rule.name}' — locked by strict schedule"
+            )
         self._unapply_rule(rule)
         rule.status = BlockStatus.PAUSED
         self.db.set_rule_status(rule.id, BlockStatus.PAUSED)
@@ -142,6 +163,10 @@ class BlockManager:
         self._notify()
 
     def delete_rule(self, rule: BlockRule) -> None:
+        if self.is_rule_locked(rule):
+            raise StrictScheduleError(
+                f"Cannot delete '{rule.name}' — locked by strict schedule"
+            )
         self._unapply_rule(rule)
         self.db.delete_rule(rule.id)
         self.db.log_activity(rule.id, rule.name, "deleted")
@@ -175,6 +200,18 @@ class BlockManager:
 
         if rule.block_ip_layer and rule.domain:
             self._block_domain_ips(rule.domain)
+
+    # Shared CDN IP ranges — blocking these would take down unrelated sites
+    _SHARED_CDN_PREFIXES = (
+        "104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.",  # Cloudflare
+        "104.22.", "104.23.", "104.24.", "104.25.", "104.26.", "104.27.",
+        "172.64.", "172.66.", "172.67.",  # Cloudflare
+        "188.114.96.", "188.114.97.", "188.114.98.", "188.114.99.",  # Cloudflare
+        "185.199.",  # GitHub Pages / raw.githubusercontent.com
+        "140.82.",   # GitHub
+        "151.101.",  # Fastly (Reddit, npm, PyPI, etc.)
+        "13.107.",   # Microsoft/Azure CDN
+    )
 
     def _block_domain_ips(self, domain: str) -> None:
         """Resolve real IPs (bypassing /etc/hosts) and add iptables DROP rules."""
@@ -213,6 +250,9 @@ class BlockManager:
                 continue
 
         for ip in ips:
+            if any(ip.startswith(pfx) for pfx in self._SHARED_CDN_PREFIXES):
+                logger.debug("Skipping shared CDN IP %s for %s", ip, domain)
+                continue
             try:
                 run_helper("iptables_add_ip", ip=ip, comment=f"blocky-{domain}")
                 logger.info("IP-blocked %s → %s", domain, ip)

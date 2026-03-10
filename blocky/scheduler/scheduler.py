@@ -31,6 +31,23 @@ def _recurrence_to_dow(recurrence: RecurrenceType, mask: int) -> str:
     return "mon-sun"
 
 
+def is_schedule_in_window(schedule: Schedule) -> bool:
+    """Check if the current time falls within a schedule's active window."""
+    if not schedule.active:
+        return False
+    now = datetime.now()
+    current_dow = now.strftime("%a").lower()[:3]
+    dow = _recurrence_to_dow(schedule.recurrence, schedule.weekday_mask)
+    if current_dow not in dow:
+        return False
+    start_h, start_m = (int(x) for x in schedule.start_time.split(":"))
+    end_h, end_m = (int(x) for x in schedule.end_time.split(":"))
+    start_mins = start_h * 60 + start_m
+    end_mins = end_h * 60 + end_m
+    now_mins = now.hour * 60 + now.minute
+    return start_mins <= now_mins < end_mins
+
+
 class BlockScheduler:
     def __init__(self) -> None:
         self._scheduler = BackgroundScheduler(
@@ -104,16 +121,7 @@ class BlockScheduler:
         self, rule: BlockRule, schedule: Schedule, dow: str
     ) -> None:
         """Activate the rule immediately if we're currently within its window."""
-        now = datetime.now()
-        current_dow = now.strftime("%a").lower()[:3]
-        if current_dow not in dow:
-            return
-        start_h, start_m = (int(x) for x in schedule.start_time.split(":"))
-        end_h, end_m = (int(x) for x in schedule.end_time.split(":"))
-        start_mins = start_h * 60 + start_m
-        end_mins = end_h * 60 + end_m
-        now_mins = now.hour * 60 + now.minute
-        if start_mins <= now_mins < end_mins:
+        if is_schedule_in_window(schedule):
             self._activate(rule.id)
 
     def reload_schedules(self, rules: list[BlockRule], schedules: list[Schedule]) -> None:
